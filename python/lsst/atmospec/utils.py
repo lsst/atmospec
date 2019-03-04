@@ -21,19 +21,43 @@
 # see <https://www.lsstcorp.org/LegalNotices/>.
 #
 
-import copy
 import numpy as np
 
 
-def makeGainFlat(detectorExposure, gainDict):
-    detector = detectorExposure.getDetector()
+def makeGainFlat(exposure, gainDict, invertGains=False):
+    """Given an exposure, make a flat from the gains.
+
+    Construct an exposure where the image array data contains the gain of the
+    pixel, such that dividing by (or mutiplying by) the image will convert
+    an image from ADU to electrons.
+
+    Parameters
+    ----------
+    detectorExposure : `lsst.afw.image.exposure`
+        The template exposure for which the flat is to be made.
+
+    gainDict : `dict` of `float`
+        A dict of the amplifiers' gains, keyed by the amp names.
+
+    invertGains : `bool`
+        Gains are specified in inverted units and should be applied as such.
+
+    Returns
+    -------
+    gainFlat : `lsst.afw.image.exposure`
+        The gain flat
+    """
+    flat = exposure.clone()
+    detector = flat.getDetector()
     ampNames = set(list(a.getName() for a in detector))
     assert set(gainDict.keys()) == ampNames
 
-    flat = copy.copy(detectorExposure)
     for amp in detector:
         bbox = amp.getBBox()
-        flat[bbox].maskedImage.image.array[:, :] = gainDict[amp.getName()]
+        if invertGains:
+            flat[bbox].maskedImage.image.array[:, :] = 1./gainDict[amp.getName()]
+        else:
+            flat[bbox].maskedImage.image.array[:, :] = gainDict[amp.getName()]
     flat.maskedImage.mask[:] = 0x0
     flat.maskedImage.variance[:] = 0.0
 
