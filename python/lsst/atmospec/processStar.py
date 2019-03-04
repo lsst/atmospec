@@ -400,7 +400,8 @@ class ProcessStarTask(pipeBase.CmdLineTask):
             self.log.info("Showing full postISR image")
             self.log.info("Centroid of main star at: {}".format(sourceCentroid))
             self.log.info("Spectrum bbox will be at: {}".format(spectrumBbox))
-            input("Press return to continue...")
+            if self.debug.pauseOnDisplay:
+                input("Press return to continue...")
         if self.debug.display and 'spectrum' in self.debug.displayItems:
             self.log.info("Showing spectrum image using bbox {}".format(spectrumBbox))
             self.disp1.mtv(exp[spectrumBbox])
