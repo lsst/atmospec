@@ -113,3 +113,109 @@ def getSamplePoints(start, stop, nSamples, includeEndpoints=False, integers=Fals
     if integers:
         return [int(x) for x in np.round(points)]
     return points
+
+
+def isExposureTrimmed(exp):
+    det = exp.getDetector()
+    if exp.getDimensions() == det.getBBox().getDimensions():
+        return True
+    return False
+
+
+def getAmpReadNoiseFromRawExp(rawExp, ampNum, nOscanBorderPix=0):
+    """XXX doctring here
+
+    Trim identically in all direction for convenience"""
+    if isExposureTrimmed(rawExp):
+        raise RuntimeError('Got an assembled exposure instead of a raw one')
+
+    det = rawExp.getDetector()
+
+    amp = det[ampNum]
+    if nOscanBorderPix == 0:
+        noise = np.std(rawExp[amp.getRawHorizontalOverscanBBox()].image.array)
+    else:
+        b = nOscanBorderPix  # line length limits :/
+        noise = np.std(rawExp[amp.getRawHorizontalOverscanBBox()].image.array[b:-b, b:-b])
+    return noise
+
+
+def gainFromFlatPair(flat1, flat2, correctionType=None, rawExpForNoiseCalc=None, overscanBorderSize=0):
+    """Calculate the gain from a pair of flats.
+
+    The basic premise is 1/g = <(I1 - I2)^2/(I1 + I2)>
+    Corrections for the variable QE and the read-noise are then made
+    following the derivation in Robert's forthcoming book, which gets
+
+    1/g = <(I1 - I2)^2/(I1 + I2)> - 1/mu(sigma^2 - 1/2g^2)
+
+    If you are lazy, see below for the solution.
+    https://www.wolframalpha.com/input/?i=solve+1%2Fy+%3D+c+-+(1%2Fm)*(s^2+-+1%2F(2y^2))+for+y
+
+    where mu is the average signal level, and sigma is the
+    amplifier's readnoise. The way the correction is applied depends on
+    the value supplied for correctionType.
+
+    correctionType is one of [None, 'simple' or 'full']
+        None     : uses the 1/g = <(I1 - I2)^2/(I1 + I2)> formula
+        'simple' : uses the gain from the None method for the 1/2g^2 term
+        'full'   : solves the full equation for g, discarding the non-physical
+                   solution to the resulting quadratic
+
+    Parameters
+    ----------
+    flat1 : `lsst.afw.image.exposure`
+        The first of the postISR assembled, overscan-subtracted flat pairs
+
+    flat2 : `lsst.afw.image.exposure`
+        The second of the postISR assembled, overscan-subtracted flat pairs
+
+    correctionType : `str` or `None`
+        The correction applied, one of [None, 'simple', 'full']
+
+    rawExpForNoiseCalc : `lsst.afw.image.exposure`
+        A raw (un-assembled) image from which to measure the noise
+
+    overscanBorderSize : `int`
+        The number of pixels to crop from the overscan region in all directions
+
+    Returns
+    -------
+    gainDict : `dict`
+        Dictionary of the amplifier gains, keyed by ampName
+    """
+    if correctionType not in [None, 'simple', 'full']:
+        raise RuntimeError("Unknown correction type %s" % correctionType)
+
+    if correctionType is not None and rawExpForNoiseCalc is None:
+        raise RuntimeError("Must supply rawFlat if performing correction")
+
+    gains = {}
+    det = flat1.getDetector()
+    for ampNum, amp in enumerate(det):
+        i1 = flat1[amp.getBBox()].image.array
+        i2 = flat2[amp.getBBox()].image.array
+        const = np.mean((i1 - i2)**2 / (i1 + i2))
+        basicGain = 1. / const
+
+        if correctionType is None:
+            gains[amp.getName()] = basicGain
+            continue
+
+        mu = (np.mean(i1) + np.mean(i2)) / 2.
+        sigma = getAmpReadNoiseFromRawExp(rawExpForNoiseCalc, ampNum, overscanBorderSize)
+
+        if correctionType == 'simple':
+            simpleGain = 1/(const - (1/mu)*(sigma**2 - (1/2*basicGain**2)))
+            gains[amp.getName()] = simpleGain
+
+        elif correctionType == 'full':
+            root = np.sqrt(mu**2 - 2*mu*const + 2*sigma**2)
+            denom = (2*const*mu - 2*sigma**2)
+
+            positiveSolution = (root + mu)/denom
+            negativeSolution = (mu - root)/denom  # noqa: F841 unused, but the other solution
+
+            gains[amp.getName()] = positiveSolution
+
+    return gains
