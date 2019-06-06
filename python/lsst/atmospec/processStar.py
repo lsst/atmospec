@@ -423,7 +423,7 @@ class ProcessStarTask(pipeBase.CmdLineTask):
         return
 
     def flatfield(self, exp, disp):
-        """Placeholder for wavelength dependent flatfielding. See TODO: DM-18141
+        """Placeholder for wavelength dependent flatfielding: TODO: DM-18141
 
         Will probably need a dataRef, as it will need to be retrieving flats
         over a range. Also, it will be somewhat complex, so probably needs
