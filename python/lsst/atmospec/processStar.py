@@ -345,6 +345,7 @@ class ProcessStarTask(pipeBase.CmdLineTask):
         self.log.info("Processing %s" % (dataRef.dataId))
         exposure = self.isr.runDataRef(dataRef).exposure
         self.run(exposure)
+        self.log.info("Finished processing %s" % (dataRef.dataId))
 
         return
 
@@ -400,7 +401,8 @@ class ProcessStarTask(pipeBase.CmdLineTask):
             self.log.info("Showing full postISR image")
             self.log.info("Centroid of main star at: {}".format(sourceCentroid))
             self.log.info("Spectrum bbox will be at: {}".format(spectrumBbox))
-            input("Press return to continue...")
+            if self.debug.pauseOnDisplay:
+                input("Press return to continue...")
         if self.debug.display and 'spectrum' in self.debug.displayItems:
             self.log.info("Showing spectrum image using bbox {}".format(spectrumBbox))
             self.disp1.mtv(exp[spectrumBbox])
@@ -422,7 +424,7 @@ class ProcessStarTask(pipeBase.CmdLineTask):
         return
 
     def flatfield(self, exp, disp):
-        """Placeholder for wavelength dependent flatfielding. See TODO: DM-18141
+        """Placeholder for wavelength dependent flatfielding: TODO: DM-18141
 
         Will probably need a dataRef, as it will need to be retrieving flats
         over a range. Also, it will be somewhat complex, so probably needs
