@@ -345,6 +345,7 @@ class ProcessStarTask(pipeBase.CmdLineTask):
         self.log.info("Processing %s" % (dataRef.dataId))
         exposure = self.isr.runDataRef(dataRef).exposure
         self.run(exposure)
+        self.log.info("Finished processing %s" % (dataRef.dataId))
 
         return
 
