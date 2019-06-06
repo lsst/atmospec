@@ -97,7 +97,8 @@ class SpectralExtractionTask(pipeBase.Task):
             Description
 
         """
-        # xxx if the rest of exp is never used, remove this and just pass exp[spectrumBbox]
+        # xxx if the rest of exp is never used, remove this
+        # and just pass exp[spectrumBbox]
         self.expRaw = exp
         self.footprintExp = exp[spectrumBbox]
         self.footprintMi = self.footprintExp.maskedImage
@@ -147,7 +148,7 @@ class SpectralExtractionTask(pipeBase.Task):
                 self.disp1 = afwDisp.Display(0, open=True)
                 self.disp1.mtv(self.expRaw[self.spectrumBbox])
                 self.disp1.erase()
-            except:
+            except Exception:
                 self.log.warn('Failed to initialise debug display')
                 self.debug.display = False
 
@@ -155,7 +156,8 @@ class SpectralExtractionTask(pipeBase.Task):
         # xsize = self.spectrumWidth - 2*self.config.perRowBackgroundSize  # 20
         # residuals = np.zeros([xsize, self.spectrumHeight])
 
-        self.backgroundMi = self._calculateBackground(self.footprintExp.maskedImage, 15, smooth=self.config.doSmoothBackround)  # xxx remove hard coding
+        self.backgroundMi = self._calculateBackground(self.footprintExp.maskedImage,   # xxx remove hardcoding
+                                                      15, smooth=self.config.doSmoothBackround)
         self.bgSubMi = self.footprintMi.clone()
         self.bgSubMi -= self.backgroundMi
         if self.debug.display and 'spectrumBgSub' in self.debug.displayItems:
@@ -177,8 +179,8 @@ class SpectralExtractionTask(pipeBase.Task):
         else:
             statType = afwMath.MEAN
 
-        # xxx consider adding a custom mask plane with GROW set high after detection
-        # to allow better masking
+        # xxx consider adding a custom mask plane with GROW set high after
+        # detection to allow better masking
 
         bctrl = afwMath.BackgroundControl(nx, ny, sctrl, statType)
         bkgd = afwMath.makeBackground(maskedImage, bctrl)
@@ -215,7 +217,8 @@ class SpectralExtractionTask(pipeBase.Task):
             pixels = np.arange(self.spectrumWidth)
         else:
             maskedImage = self.footprintMi
-            pixels = np.arange(0 + self.config.perRowBackgroundSize, (self.spectrumWidth - self.config.perRowBackgroundSize))
+            pixels = np.arange(0 + self.config.perRowBackgroundSize,
+                               (self.spectrumWidth - self.config.perRowBackgroundSize))
 
         # footprintMi = copy.copy(self.exp[self.spectrumBbox].maskedImage)
         footprintArray = maskedImage.image.array
@@ -231,7 +234,8 @@ class SpectralExtractionTask(pipeBase.Task):
         # loop over the rows, calculating basic parameters
         for rowNum in range(self.spectrumHeight):  # take row slices
             if self.config.perRowBackground:
-                footprintSlice = self.subtractBkgd(footprintArray[rowNum], self.spectrumWidth, self.config.perRowBackgroundSize)
+                footprintSlice = self.subtractBkgd(footprintArray[rowNum], self.spectrumWidth,
+                                                   self.config.perRowBackgroundSize)
             else:
                 footprintSlice = footprintArray[rowNum]
 
@@ -240,8 +244,9 @@ class SpectralExtractionTask(pipeBase.Task):
             self.rowWiseMax[rowNum] = np.max(footprintSlice)
 
             if PREVENT_RUNAWAY:
-                # xxx values seem odd, probably need changing. Should be independent of width
-                # xxx also should check if redoing this each time is better/worse
+                # xxx values seem odd, probably need changing.
+                # xxx Should be independent of width. Also should check if
+                # redoing this each time is better/worse
                 # if so then psfAmp = np.max(footprintArray[0])
                 if ((psfMu > .7*self.spectrumWidth) or (psfMu < 0.3*self.spectrumWidth)):
                     # psfMu = width/2.  # Augustin's method
@@ -257,7 +262,8 @@ class SpectralExtractionTask(pipeBase.Task):
             try:
                 (psfAmp, psfMu, psfSigma), varMatrix = \
                     curve_fit(self.gauss1D, pixels, footprintSlice, p0=initialPars,
-                              bounds=(0., [100*np.max(footprintSlice), self.spectrumWidth, 2*self.spectrumWidth]))
+                              bounds=(0., [100*np.max(footprintSlice),
+                                      self.spectrumWidth, 2*self.spectrumWidth]))
                 psfFlux = np.sqrt(2*np.pi) * psfSigma * psfAmp  # Gaussian integral
                 # parErr = np.sqrt(np.diag(varMatrix))
                 self.psfFitPars[rowNum] = (psfAmp, psfMu, psfSigma, psfFlux)
@@ -271,7 +277,8 @@ class SpectralExtractionTask(pipeBase.Task):
                                                residuals, rowNum)
                 self.moffatFitPars[rowNum] = fitValsMoffat
             except (RuntimeError, ValueError):
-                self.log.warn(f'\n\nRuntimeError during Moffat fit! rowNum = {rowNum}\n')  # serious, and should never happen
+                # serious, and should never happen
+                self.log.warn(f'\n\nRuntimeError during Moffat fit! rowNum = {rowNum}\n')
 
             try:
                 if rowNum == 0:  # bootstrapping, hence all the noqa: F821
@@ -315,6 +322,7 @@ class SpectralExtractionTask(pipeBase.Task):
 
             if self.debug.plot and ('all' in self.debug.plot or 'GausMoffat' in self.debug.plot):
                 # if((not rowNum % 10) and (rowNum < 400)):
+                if True:
                     print('aper : ', rowNum, self.apertureFlux[rowNum])
                     print(rowNum, self.psf_gauss_flux[rowNum], self.psf_gauss_psfSigma[rowNum],
                           self.psf_gauss_psfMu[rowNum], psfAmp)
@@ -335,10 +343,6 @@ class SpectralExtractionTask(pipeBase.Task):
 
         if self.config.writeResiduals:
             self.log.warn('Not implemented yet')
-            # hdu = pf.PrimaryHDU(residuals)
-            # name = "residuals.fits"
-            # hdu.writeto(os.path.join(self.spectrum.out_dir, name), overwrite=True)
-            # logging.info("writing map of residuals")
 
         return
 
@@ -385,7 +389,7 @@ class SpectralExtractionTask(pipeBase.Task):
     def gaussMoffatFit(pixels, footprint, initialPars, residuals, rowNum):
         moffatAmp, x_0, gamma, alpha, gausAmp, gausMu, gausSigma = initialPars
     # def gaussMoffatFit(pixels, footprint, amplitude, x_0, gamma, alpha, A, gausMu, gausSigma,
-    # residuals, rowNum):
+    # residuals, rowNum):  # xxx remove this, was just to be able to see the old call sig
 
         initialMoffat = models.Moffat1D(amplitude=moffatAmp, x_0=x_0, gamma=gamma, alpha=alpha)
         initialMoffat.amplitude.min = 0.
