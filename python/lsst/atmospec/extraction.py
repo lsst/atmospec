@@ -364,17 +364,17 @@ class SpectralExtractionTask(pipeBase.Task):
         return amp*np.exp(-(x-mu)**2/(2.*sigma**2))
 
     @staticmethod
-    def moffatFit(pixels, footprint, A, mu, sigma, residuals, i):
-        initialMoffat = models.Moffat1D(amplitude=A, x_0=mu, gamma=sigma)
+    def moffatFit(pixels, footprint, amp, mu, sigma, residuals, i):
+        initialMoffat = models.Moffat1D(amplitude=amp, x_0=mu, gamma=sigma)
         fitter = fitting.LevMarLSQFitter()
-        psf = fitter(initialMoffat, pixels, footprint)
+        mof = fitter(initialMoffat, pixels, footprint)
 
-        start = psf.x_0 - 5 * psf.gamma
-        end = psf.x_0 + 5 * psf.gamma
-        integral = (integrate.quad(lambda pixels: psf(pixels), start, end))[0]
+        start = mof.x_0 - 5 * mof.gamma
+        end = mof.x_0 + 5 * mof.gamma
+        integral = (integrate.quad(lambda pixels: mof(pixels), start, end))[0]
 
         # if((not i % 10) and (i < 400) and (plot == True)):
-        #     pl.plot(pixels, psf(pixels), label='Moffat')
+        #     pl.plot(pixels, mof(pixels), label='Moffat')
         #     pl.yscale('log')
         #     pl.ylim(1., 1E6)
         #     pl.plot(pixels, footprint)
@@ -382,8 +382,8 @@ class SpectralExtractionTask(pipeBase.Task):
         #     pl.show()
 
         '''Filling residuals'''
-        # residuals[:, i] = psf(pixels)-footprint
-        return integral, psf.x_0.value, psf.gamma.value, psf.alpha.value
+        # residuals[:, i] = mof(pixels)-footprint
+        return integral, mof.x_0.value, mof.gamma.value, mof.alpha.value
 
     @staticmethod
     def gaussMoffatFit(pixels, footprint, initialPars, residuals, rowNum):
