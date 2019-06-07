@@ -269,16 +269,14 @@ class SpectralExtractionTask(pipeBase.Task):
                 self.psfFitPars[rowNum] = (psfAmp, psfMu, psfSigma, psfFlux)
 
             except (RuntimeError, ValueError) as e:
-                # serious, and should never happen
                 self.log.warn(f'\nRuntimeError for basic 1D Gauss fit! rowNum = {rowNum}\n{e}')
 
             try:
                 fitValsMoffat = self.moffatFit(pixels, footprintSlice, psfAmp, psfMu, psfSigma,
                                                residuals, rowNum)
                 self.moffatFitPars[rowNum] = fitValsMoffat
-            except (RuntimeError, ValueError):
-                # serious, and should never happen
-                self.log.warn(f'\n\nRuntimeError during Moffat fit! rowNum = {rowNum}\n')
+            except (RuntimeError, ValueError) as e:
+                self.log.warn(f'\n\nRuntimeError during Moffat fit! rowNum = {rowNum}\n{e}')
 
             try:
                 if rowNum == 0:  # bootstrapping, hence all the noqa: F821
@@ -309,10 +307,12 @@ class SpectralExtractionTask(pipeBase.Task):
                 fitValsGM = self.gaussMoffatFit(pixels, footprintSlice, initialPars,
                                                 residuals, rowNum)
 
+                # import ipdb as pdb; pdb.set_trace()
+
                 self.gausMoffatFitPars[rowNum] = fitValsGM
 
-            except (RuntimeError, ValueError):
-                msg = f'\n\nRuntimeError during GaussMoffatFit fit! rowNum = {rowNum}\n'
+            except (RuntimeError, ValueError) as e:
+                msg = f'\n\nRuntimeError during GaussMoffatFit fit! rowNum = {rowNum}\n{e}'
                 self.log.warn(msg)  # serious, and should never happen
                 # self.gausMoffatFitPars.append(fitValsGM)
 
@@ -344,7 +344,7 @@ class SpectralExtractionTask(pipeBase.Task):
         if self.config.writeResiduals:
             self.log.warn('Not implemented yet')
 
-        return
+        return self
 
     @staticmethod
     def subtractBkgd(slice, width, bkgd_size):
@@ -359,8 +359,8 @@ class SpectralExtractionTask(pipeBase.Task):
         return subFootprint
 
     @staticmethod
-    def gauss1D(x, *p):
-        amp, mu, sigma = p
+    def gauss1D(x, *pars):
+        amp, mu, sigma = pars
         return amp*np.exp(-(x-mu)**2/(2.*sigma**2))
 
     @staticmethod
