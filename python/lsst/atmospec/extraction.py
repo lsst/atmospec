@@ -272,8 +272,7 @@ class SpectralExtractionTask(pipeBase.Task):
                 self.log.warn(f'\nRuntimeError for basic 1D Gauss fit! rowNum = {rowNum}\n{e}')
 
             try:
-                fitValsMoffat = self.moffatFit(pixels, footprintSlice, psfAmp, psfMu, psfSigma,
-                                               residuals, rowNum)
+                fitValsMoffat = self.moffatFit(pixels, footprintSlice, psfAmp, psfMu, psfSigma)
                 self.moffatFitPars[rowNum] = fitValsMoffat
             except (RuntimeError, ValueError) as e:
                 self.log.warn(f'\n\nRuntimeError during Moffat fit! rowNum = {rowNum}\n{e}')
@@ -304,8 +303,7 @@ class SpectralExtractionTask(pipeBase.Task):
                                    fitValsGM[7],  # noqa: F821
                                    fitValsGM[8])  # noqa: F821
 
-                fitValsGM = self.gaussMoffatFit(pixels, footprintSlice, initialPars,
-                                                residuals, rowNum)
+                fitValsGM = self.gaussMoffatFit(pixels, footprintSlice, initialPars)
 
                 self.gausMoffatFitPars[rowNum] = fitValsGM
 
@@ -362,8 +360,9 @@ class SpectralExtractionTask(pipeBase.Task):
         return amp*np.exp(-(x-mu)**2/(2.*sigma**2))
 
     @staticmethod
-    def moffatFit(pixels, footprint, amp, mu, sigma, residuals, i):
-        initialMoffat = models.Moffat1D(amplitude=amp, x_0=mu, gamma=sigma)
+    def moffatFit(pixels, footprint, amp, mu, sigma):
+        pars = (amp, mu, sigma)
+        initialMoffat = moffatModel(pars)
         fitter = fitting.LevMarLSQFitter()
         mof = fitter(initialMoffat, pixels, footprint)
 
@@ -371,20 +370,10 @@ class SpectralExtractionTask(pipeBase.Task):
         end = mof.x_0 + 5 * mof.gamma
         integral = (integrate.quad(lambda pixels: mof(pixels), start, end))[0]
 
-        # if((not i % 10) and (i < 400) and (plot == True)):
-        #     pl.plot(pixels, mof(pixels), label='Moffat')
-        #     pl.yscale('log')
-        #     pl.ylim(1., 1E6)
-        #     pl.plot(pixels, footprint)
-        #     pl.legend()
-        #     pl.show()
-
-        '''Filling residuals'''
-        # residuals[:, i] = mof(pixels)-footprint
         return integral, mof.x_0.value, mof.gamma.value, mof.alpha.value
 
     @staticmethod
-    def gaussMoffatFit(pixels, footprint, initialPars, residuals, rowNum):
+    def gaussMoffatFit(pixels, footprint, initialPars):
         model = gausMoffatModel(initialPars)
 
         model.amplitude_1.min = 0.
@@ -426,3 +415,9 @@ def gausMoffatModel(pars):
     gaus = models.Gaussian1D(amplitude=gausAmp, mean=mu, stddev=gausSigma)
     model = gaus + moff
     return model
+
+
+def moffatModel(pars):
+    amp, mu, sigma = pars
+    moff = models.Moffat1D(amplitude=amp, x_0=mu, gamma=sigma)
+    return moff
