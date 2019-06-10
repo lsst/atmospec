@@ -344,10 +344,10 @@ class ProcessStarTask(pipeBase.CmdLineTask):
         """
         self.log.info("Processing %s" % (dataRef.dataId))
         exposure = self.isr.runDataRef(dataRef).exposure
-        self.run(exposure)
+        ret = self.run(exposure)
         self.log.info("Finished processing %s" % (dataRef.dataId))
 
-        return
+        return ret
 
     def run(self, exp):
         """Calculate the wavelength calibrated 1D spectrum from a postISRCCD.
@@ -421,7 +421,7 @@ class ProcessStarTask(pipeBase.CmdLineTask):
 
         self.returnForNotebook.append(spectrum)
 
-        return
+        return spectrum
 
     def flatfield(self, exp, disp):
         """Placeholder for wavelength dependent flatfielding: TODO: DM-18141

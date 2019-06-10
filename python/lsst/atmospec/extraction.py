@@ -97,7 +97,8 @@ class SpectralExtractionTask(pipeBase.Task):
             Description
 
         """
-        # xxx if the rest of exp is never used, remove this and just pass exp[spectrumBbox]
+        # xxx if the rest of exp is never used, remove this
+        # and just pass exp[spectrumBbox]
         self.expRaw = exp
         self.footprintExp = exp[spectrumBbox]
         self.footprintMi = self.footprintExp.maskedImage
@@ -147,7 +148,7 @@ class SpectralExtractionTask(pipeBase.Task):
                 self.disp1 = afwDisp.Display(0, open=True)
                 self.disp1.mtv(self.expRaw[self.spectrumBbox])
                 self.disp1.erase()
-            except:
+            except Exception:
                 self.log.warn('Failed to initialise debug display')
                 self.debug.display = False
 
@@ -155,7 +156,8 @@ class SpectralExtractionTask(pipeBase.Task):
         # xsize = self.spectrumWidth - 2*self.config.perRowBackgroundSize  # 20
         # residuals = np.zeros([xsize, self.spectrumHeight])
 
-        self.backgroundMi = self._calculateBackground(self.footprintExp.maskedImage, 15, smooth=self.config.doSmoothBackround)  # xxx remove hard coding
+        self.backgroundMi = self._calculateBackground(self.footprintExp.maskedImage,   # xxx remove hardcoding
+                                                      15, smooth=self.config.doSmoothBackround)
         self.bgSubMi = self.footprintMi.clone()
         self.bgSubMi -= self.backgroundMi
         if self.debug.display and 'spectrumBgSub' in self.debug.displayItems:
@@ -177,8 +179,8 @@ class SpectralExtractionTask(pipeBase.Task):
         else:
             statType = afwMath.MEAN
 
-        # xxx consider adding a custom mask plane with GROW set high after detection
-        # to allow better masking
+        # xxx consider adding a custom mask plane with GROW set high after
+        # detection to allow better masking
 
         bctrl = afwMath.BackgroundControl(nx, ny, sctrl, statType)
         bkgd = afwMath.makeBackground(maskedImage, bctrl)
@@ -215,7 +217,8 @@ class SpectralExtractionTask(pipeBase.Task):
             pixels = np.arange(self.spectrumWidth)
         else:
             maskedImage = self.footprintMi
-            pixels = np.arange(0 + self.config.perRowBackgroundSize, (self.spectrumWidth - self.config.perRowBackgroundSize))
+            pixels = np.arange(0 + self.config.perRowBackgroundSize,
+                               (self.spectrumWidth - self.config.perRowBackgroundSize))
 
         # footprintMi = copy.copy(self.exp[self.spectrumBbox].maskedImage)
         footprintArray = maskedImage.image.array
@@ -231,7 +234,8 @@ class SpectralExtractionTask(pipeBase.Task):
         # loop over the rows, calculating basic parameters
         for rowNum in range(self.spectrumHeight):  # take row slices
             if self.config.perRowBackground:
-                footprintSlice = self.subtractBkgd(footprintArray[rowNum], self.spectrumWidth, self.config.perRowBackgroundSize)
+                footprintSlice = self.subtractBkgd(footprintArray[rowNum], self.spectrumWidth,
+                                                   self.config.perRowBackgroundSize)
             else:
                 footprintSlice = footprintArray[rowNum]
 
@@ -240,8 +244,9 @@ class SpectralExtractionTask(pipeBase.Task):
             self.rowWiseMax[rowNum] = np.max(footprintSlice)
 
             if PREVENT_RUNAWAY:
-                # xxx values seem odd, probably need changing. Should be independent of width
-                # xxx also should check if redoing this each time is better/worse
+                # xxx values seem odd, probably need changing.
+                # xxx Should be independent of width. Also should check if
+                # redoing this each time is better/worse
                 # if so then psfAmp = np.max(footprintArray[0])
                 if ((psfMu > .7*self.spectrumWidth) or (psfMu < 0.3*self.spectrumWidth)):
                     # psfMu = width/2.  # Augustin's method
@@ -257,21 +262,20 @@ class SpectralExtractionTask(pipeBase.Task):
             try:
                 (psfAmp, psfMu, psfSigma), varMatrix = \
                     curve_fit(self.gauss1D, pixels, footprintSlice, p0=initialPars,
-                              bounds=(0., [100*np.max(footprintSlice), self.spectrumWidth, 2*self.spectrumWidth]))
+                              bounds=(0., [100*np.max(footprintSlice),
+                                      self.spectrumWidth, 2*self.spectrumWidth]))
                 psfFlux = np.sqrt(2*np.pi) * psfSigma * psfAmp  # Gaussian integral
                 # parErr = np.sqrt(np.diag(varMatrix))
                 self.psfFitPars[rowNum] = (psfAmp, psfMu, psfSigma, psfFlux)
 
             except (RuntimeError, ValueError) as e:
-                # serious, and should never happen
                 self.log.warn(f'\nRuntimeError for basic 1D Gauss fit! rowNum = {rowNum}\n{e}')
 
             try:
-                fitValsMoffat = self.moffatFit(pixels, footprintSlice, psfAmp, psfMu, psfSigma,
-                                               residuals, rowNum)
+                fitValsMoffat = self.moffatFit(pixels, footprintSlice, psfAmp, psfMu, psfSigma)
                 self.moffatFitPars[rowNum] = fitValsMoffat
-            except (RuntimeError, ValueError):
-                self.log.warn(f'\n\nRuntimeError during Moffat fit! rowNum = {rowNum}\n')  # serious, and should never happen
+            except (RuntimeError, ValueError) as e:
+                self.log.warn(f'\n\nRuntimeError during Moffat fit! rowNum = {rowNum}\n{e}')
 
             try:
                 if rowNum == 0:  # bootstrapping, hence all the noqa: F821
@@ -299,13 +303,12 @@ class SpectralExtractionTask(pipeBase.Task):
                                    fitValsGM[7],  # noqa: F821
                                    fitValsGM[8])  # noqa: F821
 
-                fitValsGM = self.gaussMoffatFit(pixels, footprintSlice, initialPars,
-                                                residuals, rowNum)
+                fitValsGM = self.gaussMoffatFit(pixels, footprintSlice, initialPars)
 
                 self.gausMoffatFitPars[rowNum] = fitValsGM
 
-            except (RuntimeError, ValueError):
-                msg = f'\n\nRuntimeError during GaussMoffatFit fit! rowNum = {rowNum}\n'
+            except (RuntimeError, ValueError) as e:
+                msg = f'\n\nRuntimeError during GaussMoffatFit fit! rowNum = {rowNum}\n{e}'
                 self.log.warn(msg)  # serious, and should never happen
                 # self.gausMoffatFitPars.append(fitValsGM)
 
@@ -315,6 +318,7 @@ class SpectralExtractionTask(pipeBase.Task):
 
             if self.debug.plot and ('all' in self.debug.plot or 'GausMoffat' in self.debug.plot):
                 # if((not rowNum % 10) and (rowNum < 400)):
+                if True:
                     print('aper : ', rowNum, self.apertureFlux[rowNum])
                     print(rowNum, self.psf_gauss_flux[rowNum], self.psf_gauss_psfSigma[rowNum],
                           self.psf_gauss_psfMu[rowNum], psfAmp)
@@ -335,12 +339,8 @@ class SpectralExtractionTask(pipeBase.Task):
 
         if self.config.writeResiduals:
             self.log.warn('Not implemented yet')
-            # hdu = pf.PrimaryHDU(residuals)
-            # name = "residuals.fits"
-            # hdu.writeto(os.path.join(self.spectrum.out_dir, name), overwrite=True)
-            # logging.info("writing map of residuals")
 
-        return
+        return self
 
     @staticmethod
     def subtractBkgd(slice, width, bkgd_size):
@@ -355,81 +355,69 @@ class SpectralExtractionTask(pipeBase.Task):
         return subFootprint
 
     @staticmethod
-    def gauss1D(x, *p):
-        amp, mu, sigma = p
+    def gauss1D(x, *pars):
+        amp, mu, sigma = pars
         return amp*np.exp(-(x-mu)**2/(2.*sigma**2))
 
     @staticmethod
-    def moffatFit(pixels, footprint, A, mu, sigma, residuals, i):
-        initialMoffat = models.Moffat1D(amplitude=A, x_0=mu, gamma=sigma)
+    def moffatFit(pixels, footprint, amp, mu, sigma):
+        pars = (amp, mu, sigma)
+        initialMoffat = moffatModel(pars)
         fitter = fitting.LevMarLSQFitter()
-        psf = fitter(initialMoffat, pixels, footprint)
+        mof = fitter(initialMoffat, pixels, footprint)
 
-        start = psf.x_0 - 5 * psf.gamma
-        end = psf.x_0 + 5 * psf.gamma
-        integral = (integrate.quad(lambda pixels: psf(pixels), start, end))[0]
+        start = mof.x_0 - 5 * mof.gamma
+        end = mof.x_0 + 5 * mof.gamma
+        integral = (integrate.quad(lambda pixels: mof(pixels), start, end))[0]
 
-        # if((not i % 10) and (i < 400) and (plot == True)):
-        #     pl.plot(pixels, psf(pixels), label='Moffat')
-        #     pl.yscale('log')
-        #     pl.ylim(1., 1E6)
-        #     pl.plot(pixels, footprint)
-        #     pl.legend()
-        #     pl.show()
-
-        '''Filling residuals'''
-        # residuals[:, i] = psf(pixels)-footprint
-        return integral, psf.x_0.value, psf.gamma.value, psf.alpha.value
+        return integral, mof.x_0.value, mof.gamma.value, mof.alpha.value
 
     @staticmethod
-    def gaussMoffatFit(pixels, footprint, initialPars, residuals, rowNum):
-        moffatAmp, x_0, gamma, alpha, gausAmp, gausMu, gausSigma = initialPars
-    # def gaussMoffatFit(pixels, footprint, amplitude, x_0, gamma, alpha, A, gausMu, gausSigma,
-    # residuals, rowNum):
+    def gaussMoffatFit(pixels, footprint, initialPars):
+        model = gausMoffatModel(initialPars)
 
-        initialMoffat = models.Moffat1D(amplitude=moffatAmp, x_0=x_0, gamma=gamma, alpha=alpha)
-        initialMoffat.amplitude.min = 0.
-        initialMoffat.x_0.min = min(footprint)-5
-        initialMoffat.x_0.max = max(pixels)+5
-        # initialMoffat.amplitude.max = gausAmp/10.
-        initialMoffat.gamma.min = 1.
-        initialMoffat.gamma.max = 2.
-        initialMoffat.alpha.min = 1.
-        initialMoffat.alpha.max = 2.
+        model.amplitude_1.min = 0.
+        model.x_0_1.min = min(footprint)-5
+        model.x_0_1.max = max(pixels)+5
+        # model.amplitude_1.max = gausAmp/10.
+        model.gamma_1.min = 1.
+        model.gamma_1.max = 2.
+        model.alpha_1.min = 1.
+        model.alpha_1.max = 2.
 
-        initialGaus = models.Gaussian1D(amplitude=gausAmp, mean=gausMu, stddev=gausSigma)
-        initialGaus.amplitude.min = 0.
-        initialGaus.mean.min = min(footprint)-5
-        initialGaus.mean.max = max(footprint)+5
-        initialGaus.stddev.min = 0.5
-        initialGaus.stddev.max = 5.
-
-        initialModel = initialMoffat + initialGaus
+        model.amplitude_0.min = 0.
+        model.mean_0.min = min(footprint)-5
+        model.mean_0.max = max(footprint)+5
+        model.stddev_0.min = 0.5
+        model.stddev_0.max = 5.
 
         fitter = fitting.LevMarLSQFitter()
+        psf = fitter(model, pixels, footprint)
 
-        psf = fitter(initialModel, pixels, footprint)
-
-        start = psf.x_0_0 - 10 * psf.stddev_1
-        end = psf.x_0_0 + 10 * psf.stddev_1
+        start = psf.x_0_1 - 10 * psf.stddev_0
+        end = psf.x_0_1 + 10 * psf.stddev_0
         intGM = (integrate.quad(lambda pixels: psf(pixels), start, end))[0]
-        intG = np.sqrt(2 * np.pi) * psf.stddev_1 * psf.amplitude_1
+        intG = np.sqrt(2 * np.pi) * psf.stddev_0 * psf.amplitude_0
 
-        # if((not i % 10)and(i < 400) and (plot == True)):
-        #     pl.plot(pixels, psf(pixels), label='Gauss+Moffat')
-        #     pl.yscale('log')
-        #     pl.ylim(1., 1E6)
-        #     pl.plot(pixels, footprint)
-        #     pl.legend()
-        #     pl.show()
-
-        residuals[:, rowNum] = psf(pixels)-footprint
-
-        fitGausAmp = psf.amplitude_0.value
-        fitX0 = psf.x_0_0.value
-        fitGam = psf.gamma_0.value
-        fitAlpha = psf.alpha_0.value
-        fitMofAmp = psf.amplitude_1.value
-        fitMofMean = psf.mean_1.value
-        fitMofWid = psf.stddev_1.value
+        fitGausAmp = psf.amplitude_1.value
+        fitX0 = psf.x_0_1.value
+        fitGam = psf.gamma_1.value
+        fitAlpha = psf.alpha_1.value
+        fitMofAmp = psf.amplitude_0.value
+        fitMofMean = psf.mean_0.value
+        fitMofWid = psf.stddev_0.value
         return intGM, intG, fitGausAmp, fitX0, fitGam, fitAlpha, fitMofAmp, fitMofMean, fitMofWid
+
+
+def gausMoffatModel(pars):
+    moffatAmp, x0, gamma, alpha, gausAmp, mu, gausSigma = pars
+    moff = models.Moffat1D(amplitude=moffatAmp, x_0=x0, gamma=gamma, alpha=alpha)
+    gaus = models.Gaussian1D(amplitude=gausAmp, mean=mu, stddev=gausSigma)
+    model = gaus + moff
+    return model
+
+
+def moffatModel(pars):
+    amp, mu, sigma = pars
+    moff = models.Moffat1D(amplitude=amp, x_0=mu, gamma=sigma)
+    return moff
