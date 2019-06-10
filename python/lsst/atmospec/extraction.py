@@ -307,8 +307,6 @@ class SpectralExtractionTask(pipeBase.Task):
                 fitValsGM = self.gaussMoffatFit(pixels, footprintSlice, initialPars,
                                                 residuals, rowNum)
 
-                # import ipdb as pdb; pdb.set_trace()
-
                 self.gausMoffatFitPars[rowNum] = fitValsGM
 
             except (RuntimeError, ValueError) as e:
@@ -387,53 +385,44 @@ class SpectralExtractionTask(pipeBase.Task):
 
     @staticmethod
     def gaussMoffatFit(pixels, footprint, initialPars, residuals, rowNum):
-        moffatAmp, x_0, gamma, alpha, gausAmp, gausMu, gausSigma = initialPars
-    # def gaussMoffatFit(pixels, footprint, amplitude, x_0, gamma, alpha, A, gausMu, gausSigma,
-    # residuals, rowNum):  # xxx remove this, was just to be able to see the old call sig
+        model = gausMoffatModel(initialPars)
 
-        initialMoffat = models.Moffat1D(amplitude=moffatAmp, x_0=x_0, gamma=gamma, alpha=alpha)
-        initialMoffat.amplitude.min = 0.
-        initialMoffat.x_0.min = min(footprint)-5
-        initialMoffat.x_0.max = max(pixels)+5
-        # initialMoffat.amplitude.max = gausAmp/10.
-        initialMoffat.gamma.min = 1.
-        initialMoffat.gamma.max = 2.
-        initialMoffat.alpha.min = 1.
-        initialMoffat.alpha.max = 2.
+        model.amplitude_1.min = 0.
+        model.x_0_1.min = min(footprint)-5
+        model.x_0_1.max = max(pixels)+5
+        # model.amplitude_1.max = gausAmp/10.
+        model.gamma_1.min = 1.
+        model.gamma_1.max = 2.
+        model.alpha_1.min = 1.
+        model.alpha_1.max = 2.
 
-        initialGaus = models.Gaussian1D(amplitude=gausAmp, mean=gausMu, stddev=gausSigma)
-        initialGaus.amplitude.min = 0.
-        initialGaus.mean.min = min(footprint)-5
-        initialGaus.mean.max = max(footprint)+5
-        initialGaus.stddev.min = 0.5
-        initialGaus.stddev.max = 5.
-
-        initialModel = initialMoffat + initialGaus
+        model.amplitude_0.min = 0.
+        model.mean_0.min = min(footprint)-5
+        model.mean_0.max = max(footprint)+5
+        model.stddev_0.min = 0.5
+        model.stddev_0.max = 5.
 
         fitter = fitting.LevMarLSQFitter()
+        psf = fitter(model, pixels, footprint)
 
-        psf = fitter(initialModel, pixels, footprint)
-
-        start = psf.x_0_0 - 10 * psf.stddev_1
-        end = psf.x_0_0 + 10 * psf.stddev_1
+        start = psf.x_0_1 - 10 * psf.stddev_0
+        end = psf.x_0_1 + 10 * psf.stddev_0
         intGM = (integrate.quad(lambda pixels: psf(pixels), start, end))[0]
-        intG = np.sqrt(2 * np.pi) * psf.stddev_1 * psf.amplitude_1
+        intG = np.sqrt(2 * np.pi) * psf.stddev_0 * psf.amplitude_0
 
-        # if((not i % 10)and(i < 400) and (plot == True)):
-        #     pl.plot(pixels, psf(pixels), label='Gauss+Moffat')
-        #     pl.yscale('log')
-        #     pl.ylim(1., 1E6)
-        #     pl.plot(pixels, footprint)
-        #     pl.legend()
-        #     pl.show()
-
-        residuals[:, rowNum] = psf(pixels)-footprint
-
-        fitGausAmp = psf.amplitude_0.value
-        fitX0 = psf.x_0_0.value
-        fitGam = psf.gamma_0.value
-        fitAlpha = psf.alpha_0.value
-        fitMofAmp = psf.amplitude_1.value
-        fitMofMean = psf.mean_1.value
-        fitMofWid = psf.stddev_1.value
+        fitGausAmp = psf.amplitude_1.value
+        fitX0 = psf.x_0_1.value
+        fitGam = psf.gamma_1.value
+        fitAlpha = psf.alpha_1.value
+        fitMofAmp = psf.amplitude_0.value
+        fitMofMean = psf.mean_0.value
+        fitMofWid = psf.stddev_0.value
         return intGM, intG, fitGausAmp, fitX0, fitGam, fitAlpha, fitMofAmp, fitMofMean, fitMofWid
+
+
+def gausMoffatModel(pars):
+    moffatAmp, x0, gamma, alpha, gausAmp, mu, gausSigma = pars
+    moff = models.Moffat1D(amplitude=moffatAmp, x_0=x0, gamma=gamma, alpha=alpha)
+    gaus = models.Gaussian1D(amplitude=gausAmp, mean=mu, stddev=gausSigma)
+    model = gaus + moff
+    return model
