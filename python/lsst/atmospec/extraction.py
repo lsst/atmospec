@@ -166,6 +166,13 @@ class SpectralExtractionTask(pipeBase.Task):
         return
 
     def _calculateBackground(self, maskedImage, nbins, ignorePlanes=['DETECTED', 'BAD', 'SAT'], smooth=True):
+
+        assert nbins > 0
+        if nbins > maskedImage.getHeight() - 1:
+            self.log.warn(f"More bins selected for background than pixels in image height." +
+                          f" Reducing numbers of bins from {nbins} to {maskedImage.getHeight()-1}.")
+            nbins = maskedImage.getHeight() - 1
+
         nx = 1
         ny = nbins
         sctrl = afwMath.StatisticsControl()
@@ -190,12 +197,19 @@ class SpectralExtractionTask(pipeBase.Task):
         if not smooth:
             return bgImg
 
+        # Note that nbins functions differently for scipy.interp1d than for
+        # afwMath.BackgroundControl
+
+        nbins += 1  # if you want 1 bin you must specify two to getSamplePoints() because of ends
+
+        kind = 'cubic' if nbins >= 4 else 'linear'  # note nbinbs has been incrememented
+
         # bgImg is now an image the same size as the input, as a column of
         # 1 x n blocks, which we now interpolate to make a smooth background
-        xs = getSamplePoints(0, bgImg.getHeight()-1, 15, includeEndpoints=True, integers=True)
+        xs = getSamplePoints(0, bgImg.getHeight()-1, nbins, includeEndpoints=True, integers=True)
         vals = [bgImg[0, point, afwImage.LOCAL] for point in xs]
 
-        interpFunc = interp1d(xs, vals, kind='cubic')
+        interpFunc = interp1d(xs, vals, kind=kind)
         xsNew = np.linspace(0, bgImg.getHeight()-1, bgImg.getHeight())  # integers over range
         assert xsNew[1]-xsNew[0] == 1  # easy to make off-by-one errors here
 
@@ -223,7 +237,8 @@ class SpectralExtractionTask(pipeBase.Task):
         # footprintMi = copy.copy(self.exp[self.spectrumBbox].maskedImage)
         footprintArray = maskedImage.image.array
 
-        residuals = np.zeros([len(pixels), self.spectrumHeight])  # delete this next xxx merlin
+        # delete this next xxx merlin
+        # residuals = np.zeros([len(pixels), self.spectrumHeight])
 
         psfAmp = np.max(footprintArray[0])
         psfSigma = np.std(footprintArray[0])

@@ -22,13 +22,32 @@
 # the GNU General Public License along with this program.  If not,
 # see <https://www.lsstcorp.org/LegalNotices/>.
 #
-"""Test cases for cp_pipe."""
+"""Test cases for atmospec."""
 
-from __future__ import absolute_import, division, print_function
 import unittest
+import itertools
+import numpy as np
 
 import lsst.utils
 import lsst.utils.tests
+import lsst.log as lsstLog
+import lsst.afw.image as afwImage
+from lsst.atmospec.extraction import SpectralExtractionTask, getSamplePoints
+
+TRACEBACKS_FOR_ABI_WARNINGS = False
+
+if TRACEBACKS_FOR_ABI_WARNINGS:
+    import traceback
+    import warnings
+    import sys
+
+    def warn_with_traceback(message, category, filename, lineno, file=None, line=None):
+
+        log = file if hasattr(file, 'write') else sys.stderr
+        traceback.print_stack(file=log)
+        log.write(warnings.formatwarning(message, category, filename, lineno, line))
+
+    warnings.showwarning = warn_with_traceback
 
 
 class ProcessStarTestCase(lsst.utils.tests.TestCase):
@@ -38,51 +57,82 @@ class ProcessStarTestCase(lsst.utils.tests.TestCase):
         import lsst.atmospec as atmospec  # noqa: F401
 
     def testClassInstantiation(self):
-        from lsst.atmospec.extraction import SpectralExtractionTask
         config = SpectralExtractionTask.ConfigClass
         task = SpectralExtractionTask(config=config)
         del config, task
 
     def test_calculateBackgroundMasking(self):
-        from lsst.atmospec.extraction import SpectralExtractionTask
-        import numpy as np
-        import lsst.afw.image as afwImage
-
         task = SpectralExtractionTask()
 
-        mi = afwImage.MaskedImageF(5, 5)
-        mi.image.array[:] = np.ones((5, 5))
+        for nbins in [1, 2, 3]:
 
-        nbins = 1
+            mi = afwImage.MaskedImageF(5, 5)
+            mi.image.array[:] = np.ones((5, 5))
 
-        bgImg = task._calculateBackground(mi, nbins)
-        self.assertEqual(np.shape(mi.image.array), np.shape(bgImg.array))
-        self.assertEqual(np.max(bgImg.array), 1.)
+            bgImg = task._calculateBackground(mi, nbins)
+            self.assertEqual(np.shape(mi.image.array), np.shape(bgImg.array))
+            self.assertEqual(np.max(bgImg.array), 1.)
 
-        mi.image.array[2, 2] = 100
-        bgImg = task._calculateBackground(mi, nbins)
-        self.assertTrue(np.max(bgImg.array) > 1.)
+            mi.image.array[2, 2] = 100
+            bgImg = task._calculateBackground(mi, nbins)
+            self.assertTrue(np.max(bgImg.array) > 1.)
 
-        MaskPixel = afwImage.MaskPixel
-        mi.mask.array[2, 2] = afwImage.Mask[MaskPixel].getPlaneBitMask("DETECTED")
-        bgImg = task._calculateBackground(mi, nbins)
-        self.assertEqual(np.max(bgImg.array), 1.)
+            MaskPixel = afwImage.MaskPixel
+            mi.mask.array[2, 2] = afwImage.Mask[MaskPixel].getPlaneBitMask("DETECTED")
+            bgImg = task._calculateBackground(mi, nbins)
+            self.assertEqual(np.max(bgImg.array), 1.)
 
-        mi.image.array[3, 3] = 200
-        mi.mask.array[3, 3] = afwImage.Mask[MaskPixel].getPlaneBitMask("BAD")
-        self.assertEqual(np.max(mi.image.array), 200)
-        # don't include "BAD", but it's the default, so exclude explicitly
-        bgImg = task._calculateBackground(mi, nbins, ignorePlanes="DETECTED")
-        self.assertTrue(np.max(bgImg.array > 1.))
+            mi.image.array[3, 3] = 200
+            mi.mask.array[3, 3] = afwImage.Mask[MaskPixel].getPlaneBitMask("BAD")
+            self.assertEqual(np.max(mi.image.array), 200)
+            # don't include "BAD", but it's the default, so exclude explicitly
+            bgImg = task._calculateBackground(mi, nbins, ignorePlanes="DETECTED")
+            self.assertTrue(np.max(bgImg.array > 1.))
 
-        # And now check the explicitly including it gets us back to where we were
-        bgImg = task._calculateBackground(mi, nbins, ignorePlanes=["DETECTED", "BAD"])
-        self.assertEqual(np.max(bgImg.array), 1)
+            # And now check thet explicitly including it gets us back
+            # to where we were
+            bgImg = task._calculateBackground(mi, nbins, ignorePlanes=["DETECTED", "BAD"])
+            self.assertEqual(np.max(bgImg.array), 1)
+
+        for nbins in [5, 15, 50]:
+            logName = 'spectralExtraction'
+            with lsstLog.UsePythonLogging():  # otherwise none of this is caught
+                with self.assertLogs(logName, level='WARN'):  # not found info-logs for (un)desirable
+
+                    mi = afwImage.MaskedImageF(5, 5)
+                    mi.image.array[:] = np.ones((5, 5))
+
+                    bgImg = task._calculateBackground(mi, nbins)
+                    self.assertEqual(np.shape(mi.image.array), np.shape(bgImg.array))
+                    self.assertEqual(np.max(bgImg.array), 1.)
+
+                    mi.image.array[2, 2] = 100
+                    bgImg = task._calculateBackground(mi, nbins)
+                    self.assertTrue(np.max(bgImg.array) > 1.)
+
+                    MaskPixel = afwImage.MaskPixel
+                    mi.mask.array[2, 2] = afwImage.Mask[MaskPixel].getPlaneBitMask("DETECTED")
+                    bgImg = task._calculateBackground(mi, nbins)
+                    self.assertEqual(np.max(bgImg.array), 1.)
+
+                    mi.image.array[3, 3] = 200
+                    mi.mask.array[3, 3] = afwImage.Mask[MaskPixel].getPlaneBitMask("BAD")
+                    self.assertEqual(np.max(mi.image.array), 200)
+                    # don't include "BAD", but it's the default, so exclude explicitly
+                    bgImg = task._calculateBackground(mi, nbins, ignorePlanes="DETECTED")
+                    self.assertTrue(np.max(bgImg.array > 1.))
+
+                    # And now check thet explicitly including it gets us back
+                    # to where we were
+                    bgImg = task._calculateBackground(mi, nbins, ignorePlanes=["DETECTED", "BAD"])
+                    self.assertEqual(np.max(bgImg.array), 1)
+
+        # TODO:
+        # should make a new test that makes a larger image and actually tests
+        # interpolation and background calculations
+        # also, I'm sure this could be tidied up with itertools
 
     def test_getSamplePoints(self):
-        from lsst.atmospec.extraction import getSamplePoints
-        import itertools
-
         points = getSamplePoints(0, 100, 3, includeEndpoints=False, integers=False)
         self.assertEqual(points, [16.666666666666668, 50.0, 83.33333333333334])
 
