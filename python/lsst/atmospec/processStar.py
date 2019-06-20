@@ -21,7 +21,7 @@
 # see <https://www.lsstcorp.org/LegalNotices/>.
 #
 
-__all__ = ['ProcessStarTask']
+__all__ = ['ProcessStarTask', 'ProcessStarTaskConfig']
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -36,6 +36,7 @@ import lsst.afw.geom as afwGeom
 
 from .dispersion import DispersionRelation
 from .extraction import SpectralExtractionTask
+from .utils import rotateExposure
 
 
 class ProcessStarTaskConfig(pexConfig.Config):
@@ -349,6 +350,11 @@ class ProcessStarTask(pipeBase.CmdLineTask):
 
         return ret
 
+    def pause(self):
+        if self.debug.pauseOnDisplay:
+            input("Press return to continue...")
+        return
+
     def run(self, exp):
         """Calculate the wavelength calibrated 1D spectrum from a postISRCCD.
 
@@ -389,23 +395,28 @@ class ProcessStarTask(pipeBase.CmdLineTask):
             The wavelength-calibrated 1D stellar spectrum
         """
 
-        sourceCentroid = self.findMainSource(exp)
-        self.log.info("Centroid of main star at: {}".format(sourceCentroid))
+        if self.config.dispersionDirection == 'x':
+            exp = rotateExposure(exp, 270)
 
-        spectrumBbox = self.calcSpectrumBbox(exp, sourceCentroid, self.config.aperture,
+        sourceCentroid = self.findMainSource(exp)
+        self.log.info(f"Centroid of main star at: {sourceCentroid!r}")
+
+        spectrumBBox = self.calcSpectrumBBox(exp, sourceCentroid, self.config.aperture,
                                              self.config.spectralOrder)
-        self.log.info("Spectrum bbox = {}".format(spectrumBbox))
+
+        self.log.info("Spectrum bbox = {}".format(spectrumBBox))
 
         if self.debug.display and 'raw' in self.debug.displayItems:
             self.disp1.mtv(exp)
+            self.disp1.dot('x', sourceCentroid[0], sourceCentroid[1], size=100)
             self.log.info("Showing full postISR image")
-            self.log.info("Centroid of main star at: {}".format(sourceCentroid))
-            self.log.info("Spectrum bbox will be at: {}".format(spectrumBbox))
-            if self.debug.pauseOnDisplay:
-                input("Press return to continue...")
+            self.log.info(f"Centroid of main star at: {sourceCentroid}")
+            self.log.info(f"Spectrum bbox will be at: {spectrumBBox!r}")
+            self.pause()
         if self.debug.display and 'spectrum' in self.debug.displayItems:
-            self.log.info("Showing spectrum image using bbox {}".format(spectrumBbox))
-            self.disp1.mtv(exp[spectrumBbox])
+            self.log.info(f"Showing spectrum image using bbox {spectrumBBox!r}")
+            self.disp1.mtv(exp[spectrumBBox])
+            self.pause()
 
         disp = DispersionRelation(None, [2, 4, 6])
 
@@ -415,13 +426,15 @@ class ProcessStarTask(pipeBase.CmdLineTask):
         if self.config.doCosmics:
             exp = self.repairCosmics(exp, disp)
 
-        self.returnForNotebook = [exp, spectrumBbox]  # xxx remove this, just for notebook playing
+        self.returnForNotebook = [exp, spectrumBBox]  # xxx remove this, just for notebook playing
 
-        spectrum = self.measureSpectrum(exp, sourceCentroid, spectrumBbox, disp)
+        # ridgeline = self.calcRidgeline(exp, spectrumBBox)
+
+        spectrum = self.measureSpectrum(exp, sourceCentroid, spectrumBBox, disp)
 
         self.returnForNotebook.append(spectrum)
 
-        return spectrum
+        return self.returnForNotebook
 
     def flatfield(self, exp, disp):
         """Placeholder for wavelength dependent flatfielding: TODO: DM-18141
@@ -436,17 +449,17 @@ class ProcessStarTask(pipeBase.CmdLineTask):
         self.log.warn("Cosmic ray repair not yet implemented")
         return exp
 
-    def measureSpectrum(self, exp, sourceCentroid, spectrumBbox, dispersionRelation):
+    def measureSpectrum(self, exp, sourceCentroid, spectrumBBox, dispersionRelation):
         """Perform the spectral extraction, given a source location and exp."""
 
-        self.extraction.initialise(exp, sourceCentroid, spectrumBbox, dispersionRelation)
+        self.extraction.initialise(exp, sourceCentroid, spectrumBBox, dispersionRelation)
 
         # xxx this method currently doesn't return an object - fix this
         spectrum = self.extraction.getFluxBasic()
 
         return spectrum
 
-    def calcSpectrumBbox(self, exp, centroid, aperture, order='+1'):
+    def calcSpectrumBBox(self, exp, centroid, aperture, order='+1'):
         """Calculate the bbox for the spectrum, given the centroid.
 
         XXX Longer explanation here, inc. parameters
@@ -454,27 +467,19 @@ class ProcessStarTask(pipeBase.CmdLineTask):
         """
         extent = self.config.spectrumLengthPixels
         halfWidth = aperture//2
-        translate_x = self.config.offsetFromMainStar
         translate_y = self.config.offsetFromMainStar
         sourceX = centroid[0]
         sourceY = centroid[1]
 
         if(order == '-1'):
-            translate_x = - extent - self.config.offsetFromMainStar
             translate_y = - extent - self.config.offsetFromMainStar
 
-        if (self.config.dispersionDirection == 'x'):
-            xStart = sourceX + translate_x
-            xEnd = xStart + extent - 1
-            yStart = sourceY - halfWidth
-            yEnd = sourceY + halfWidth - 1
-        elif(self.config.dispersionDirection == 'y'):
-            xStart = sourceX - halfWidth
-            xEnd = sourceX + halfWidth - 1
-            yStart = sourceY + translate_y
-            yEnd = yStart + extent - 1
+        xStart = sourceX - halfWidth
+        xEnd = sourceX + halfWidth - 1
+        yStart = sourceY + translate_y
+        yEnd = yStart + extent - 1
 
-        xEnd = min(xEnd, exp.getWidth())
+        xEnd = min(xEnd, exp.getWidth()-1)
         yEnd = min(yEnd, exp.getHeight()-1)
         yStart = max(yStart, 0)
         xStart = max(xStart, 0)
@@ -485,3 +490,9 @@ class ProcessStarTask(pipeBase.CmdLineTask):
 
         bbox = afwGeom.Box2I(afwGeom.Point2I(xStart, yStart), afwGeom.Point2I(xEnd, yEnd))
         return bbox
+
+        # def calcRidgeLine(self, footprint):
+        #     ridgeLine = np.zeros(self.footprint.length)
+        #     for
+
+        #     return ridgeLine
