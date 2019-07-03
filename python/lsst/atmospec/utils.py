@@ -22,6 +22,12 @@
 #
 
 import numpy as np
+import lsst.afw.math as afwMath
+import lsst.afw.image as afwImage
+import lsst.log as lsstLog
+import lsst.afw.geom as afwGeom
+import lsst.afw.cameraGeom as camGeom
+from lsst.afw.cameraGeom import PIXELS, FOCAL_PLANE
 
 
 def makeGainFlat(exposure, gainDict, invertGains=False):
@@ -80,7 +86,7 @@ def getSamplePoints(start, stop, nSamples, includeEndpoints=False, integers=Fals
     sample the range. If asking for integers, rounded values are returned,
     rather than int-truncated ones.
 
-    If not including the endpoints, divide the (stop-start) range into nSamples,
+    If not including the endpoints, divide the (stop-start) range into nSamples
     and return the midpoint of each section, thus leaving a sectionLength/2 gap
     between the first/last samples and the range start/end.
 
@@ -219,3 +225,54 @@ def gainFromFlatPair(flat1, flat2, correctionType=None, rawExpForNoiseCalc=None,
             gains[amp.getName()] = positiveSolution
 
     return gains
+
+
+def rotateExposure(exp, nDegrees, kernelName='lanczos4', logger=None):
+    """Rotate an exposure by nDegrees clockwise.
+
+    Parameters
+    ----------
+    exp : `lsst.afw.image.exposure.Exposure`
+        The exposure to rotate
+    nDegrees : `float`
+        Number of degrees clockwise to rotate by
+    kernelName : `str`
+        Name of the warping kernel, used to instantiate the warper.
+    logger : `lsst.log.Log`
+        Logger for logging warnings
+
+    Returns
+    -------
+    rotatedExp : `lsst.afw.image.exposure.Exposure`
+        A copy of the input exposure, rotated by nDegrees
+    """
+    nDegrees += 180  # rotations of zero give a 180 degree rotation for some reason
+    nDegrees = nDegrees % 360
+
+    if not logger:
+        logger = lsstLog.getLogger('atmospec.utils')
+
+    wcs = exp.getWcs()
+    if not wcs:
+        logger.warn("Can't rotate exposure without a wcs - returning exp unrotated")
+        return exp.clone()  # return a clone so it's always returning a copy as this is what default does
+
+    warper = afwMath.Warper(kernelName)
+    if isinstance(exp, afwImage.ExposureU):
+        # TODO: remove once this bug is fixed - DM-20258
+        logger.info('Converting ExposureU to ExposureF due to bug')
+        logger.info('Remove this workaround after DM-20258')
+        exp = afwImage.ExposureF(exp, deep=True)
+
+    detector = exp.getDetector()
+    pixelScale = wcs.getPixelScale().asDegrees()
+    crval = wcs.getSkyOrigin()
+    rotAngle = afwGeom.Angle(nDegrees, afwGeom.degrees)
+    cd = (afwGeom.LinearTransform.makeScaling(pixelScale) *
+          afwGeom.LinearTransform.makeRotation(rotAngle))
+    crpix = detector.transform(afwGeom.Point2D(0, 0), FOCAL_PLANE, PIXELS)
+    rotatedWcs = afwGeom.makeSkyWcs(crpix=crpix, crval=crval, cdMatrix=cd.getMatrix())
+
+    rotatedExp = warper.warpExposure(rotatedWcs, exp)
+    rotatedExp.setXY0(afwGeom.Point2I(0, 0))
+    return rotatedExp

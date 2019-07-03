@@ -25,14 +25,13 @@
 """Test cases for atmospec."""
 
 import unittest
-import itertools
 import numpy as np
 
 import lsst.utils
 import lsst.utils.tests
 import lsst.log as lsstLog
 import lsst.afw.image as afwImage
-from lsst.atmospec.extraction import SpectralExtractionTask, getSamplePoints
+from lsst.atmospec.extraction import SpectralExtractionTask
 
 TRACEBACKS_FOR_ABI_WARNINGS = False
 
@@ -118,7 +117,9 @@ class ProcessStarTestCase(lsst.utils.tests.TestCase):
                     mi.image.array[3, 3] = 200
                     mi.mask.array[3, 3] = afwImage.Mask[MaskPixel].getPlaneBitMask("BAD")
                     self.assertEqual(np.max(mi.image.array), 200)
-                    # don't include "BAD", but it's the default, so exclude explicitly
+
+                    # don't include "BAD", but it's the default
+                    # so exclude explicitly
                     bgImg = task._calculateBackground(mi, nbins, ignorePlanes="DETECTED")
                     self.assertTrue(np.max(bgImg.array > 1.))
 
@@ -131,42 +132,6 @@ class ProcessStarTestCase(lsst.utils.tests.TestCase):
         # should make a new test that makes a larger image and actually tests
         # interpolation and background calculations
         # also, I'm sure this could be tidied up with itertools
-
-    def test_getSamplePoints(self):
-        points = getSamplePoints(0, 100, 3, includeEndpoints=False, integers=False)
-        self.assertEqual(points, [16.666666666666668, 50.0, 83.33333333333334])
-
-        points = getSamplePoints(0, 100, 3, includeEndpoints=False, integers=True)
-        self.assertEqual(points, [17, 50, 83])
-
-        points = getSamplePoints(0, 100, 3, includeEndpoints=True, integers=False)
-        self.assertEqual(points, [0, 50, 100])
-
-        points = getSamplePoints(0, 100, 4, includeEndpoints=True, integers=False)
-        self.assertEqual(points, [0, 33.333333333333336, 66.66666666666667, 100.0])
-
-        points = getSamplePoints(0, 100, 4, includeEndpoints=False, integers=False)
-        self.assertEqual(points, [12.5, 37.5, 62.5, 87.5])
-
-        points = getSamplePoints(0, 100, 5, includeEndpoints=False, integers=False)
-        self.assertEqual(points, [10.0, 30.0, 50.0, 70.0, 90.0])
-
-        points = getSamplePoints(0, 100, 5, includeEndpoints=True, integers=False)
-        self.assertEqual(points, [0, 25.0, 50.0, 75.0, 100.0])
-
-        points = getSamplePoints(0, 100.1, 5, includeEndpoints=True, integers=False)
-        self.assertEqual(points[-1], 100.1)
-
-        points = getSamplePoints(0, 100.1, 5, includeEndpoints=True, integers=True)
-        self.assertNotEqual(points[-1], 100.1)
-
-        for ints in (True, False):
-            with self.assertRaises(RuntimeError):
-                getSamplePoints(0, 100, 1, includeEndpoints=True, integers=ints)
-
-        for start, end in itertools.product((-1.5, -1, 0, 2.3), (0, 3.14, -1e9)):
-            points = getSamplePoints(start, end, 2, includeEndpoints=True, integers=False)
-            self.assertEqual(points, [start, end])
 
 
 class TestMemory(lsst.utils.tests.MemoryTestCase):
