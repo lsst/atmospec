@@ -25,6 +25,7 @@ __all__ = ['ProcessStarTask', 'ProcessStarTaskConfig']
 
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.backends.backend_pdf import PdfPages
 
 import lsstDebug
 import lsst.afw.image as afwImage
@@ -37,6 +38,7 @@ import lsst.afw.geom as afwGeom
 from .dispersion import DispersionRelation
 from .extraction import SpectralExtractionTask
 from .utils import rotateExposure
+from .spectraction import SpectractorShim
 
 
 class ProcessStarTaskConfig(pexConfig.Config):
@@ -345,7 +347,9 @@ class ProcessStarTask(pipeBase.CmdLineTask):
         """
         self.log.info("Processing %s" % (dataRef.dataId))
         exposure = self.isr.runDataRef(dataRef).exposure
-        ret = self.run(exposure)
+        outputRoot = dataRef.getUri(datasetType='spectractorOutputRoot', write=True)
+        visitNum = dataRef.dataId['visit']
+        ret = self.run(exposure, outputRoot, visitNum)
         self.log.info("Finished processing %s" % (dataRef.dataId))
 
         return ret
@@ -355,7 +359,7 @@ class ProcessStarTask(pipeBase.CmdLineTask):
             input("Press return to continue...")
         return
 
-    def run(self, exp):
+    def run(self, exp, spectractorOutputRoot, visitNum):
         """Calculate the wavelength calibrated 1D spectrum from a postISRCCD.
 
         An outline of the steps in the processing is as follows:
@@ -395,11 +399,38 @@ class ProcessStarTask(pipeBase.CmdLineTask):
             The wavelength-calibrated 1D stellar spectrum
         """
 
-        if self.config.dispersionDirection == 'x':
-            exp = rotateExposure(exp, 270)
+        # GOTO
+        if True:
+            overrideDict = {'SAVE': True,
+                            'OBS_NAME': 'CTIO',
+                            'DEBUG': True,
+                            'VERBOSE': True}
+            supplementDict = {'CALLING_CODE': 'LSST_DM',
+                              'LSST_SAVEFIGPATH': '/home/mfl/atmospec_june2017repo/rerun/test/spectractorOutput/v271321775/plots/'}
+        else:
+            overrideDict = {}
+            supplementDict = {}
+
+        # if self.config.dispersionDirection == 'x':
+            # exp = rotateExposure(exp, 270)
 
         sourceCentroid = self.findMainSource(exp)
         self.log.info(f"Centroid of main star at: {sourceCentroid!r}")
+
+        spectractor = SpectractorShim(overrideDict, supplementDict)
+        disperser = 'HoloPhAg'
+        target = 'PNG321.0+3.9'
+        # xpos = 814
+        # ypos = 585
+        # xpos
+        import ipdb as pdb; pdb.set_trace()
+
+        xpos = sourceCentroid[0]
+        ypos = sourceCentroid[1]
+        # xxx need to remove target and disperser and get from butler (fake) and exp info
+        spectractor.run(exp, xpos, ypos, target, disperser, spectractorOutputRoot, visitNum)
+
+        return
 
         spectrumBBox = self.calcSpectrumBBox(exp, sourceCentroid, self.config.aperture,
                                              self.config.spectralOrder)
