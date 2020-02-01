@@ -185,7 +185,7 @@ class ProcessStarTask(pipeBase.CmdLineTask):
                     self.debug.display = False
                     self.log.warn('Failed to setup/connect to display! Debug display has been disabled')
 
-        if self.debug.notheadless:
+        if self.debug.notHeadless:
             pass  # other backend options can go here
         else:  # this stop windows popping up when plotting. When headless, use 'agg' backend too
             plt.interactive(False)
@@ -423,7 +423,6 @@ class ProcessStarTask(pipeBase.CmdLineTask):
         # xpos = 814
         # ypos = 585
         # xpos
-        import ipdb as pdb; pdb.set_trace()
 
         xpos = sourceCentroid[0]
         ypos = sourceCentroid[1]
