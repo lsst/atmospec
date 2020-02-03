@@ -418,8 +418,8 @@ class ProcessStarTask(pipeBase.CmdLineTask):
         self.log.info(f"Centroid of main star at: {sourceCentroid!r}")
 
         spectractor = SpectractorShim(overrideDict, supplementDict)
-        disperser = 'HoloPhAg'
-        target = 'PNG321.0+3.9'
+        disperser = 'Ron90'
+        target = 'HD107696'
         # xpos = 814
         # ypos = 585
         # xpos

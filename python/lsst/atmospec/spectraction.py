@@ -91,7 +91,7 @@ class SpectractorShim():
             else:
                 setattr(parameters, k, v)
 
-    def spectractorImageFromLsstExposure(self, exp, target='', disperser_label=''):
+    def spectractorImageFromLsstExposure(self, exp, target_label='', disperser_label=''):
         """Construct a Spectractor Image object from LSST objects.
 
         Internally we try to use functions that calculate things and return
@@ -100,7 +100,7 @@ class SpectractorShim():
         are labeled _setSomething().
         """
         file_name = '/home/mfl/lsst/Spectractor/tests/data/reduc_20170605_028.fits'
-        image = Image(file_name=file_name, target=target, disperser_label=disperser_label)
+        image = Image(file_name=file_name, target_label=target_label, disperser_label=disperser_label)
 
         image.data = self._getImageData(exp)
         image.read_out_noise = self._readNoiseFromExp(exp, 12)
@@ -114,13 +114,17 @@ class SpectractorShim():
         self._setImageAndHeaderInfo(image, exp)
 
         image.disperser = Hologram(disperser_label, D=parameters.DISTANCE2CCD,
-                                   data_dir=parameters.HOLO_DIR, verbose=parameters.VERBOSE)
+                                   data_dir=parameters.DISPERSER_DIR, verbose=parameters.VERBOSE)
         return image
 
     def _setImageAndHeaderInfo(self, image, exp, useVisitInfo=False):
         # currently set in spectractor.tools.extract_info_from_CTIO_header()
         filterName = exp.getFilter().getName()
-        filt1, filt2 = filterName.split('+')
+        if len(filterName.split('+')) == 1:
+            filt1 = filterName
+            filt2 = exp.getInfo().getMetadata()['GRATING']
+        else:
+            filt1, filt2 = filterName.split('+')
 
         image.header.filter = filt1
         image.header.disperser_label = filt2
@@ -130,14 +134,19 @@ class SpectractorShim():
         image.header['LSHIFT'] = 0.  # check if necessary
         image.header['D2CCD'] = parameters.DISTANCE2CCD  # necessary MFL
 
-        if useVisitInfo:
-            vi = exp.getInfo().getVisitInfo()
-            image.header.airmass = vi.getBoresightAirmass()  # currently returns nan for obs_ctio0m9
+        try:
+            if useVisitInfo:
+                vi = exp.getInfo().getVisitInfo()
+                image.header.airmass = vi.getBoresightAirmass()  # currently returns nan for obs_ctio0m9
 
-        else:
-            md = exp.getMetadata().toDict()
-            image.header.airmass = md['AIRMASS']
-            image.date_obs = md['DATE']
+            else:
+                md = exp.getMetadata().toDict()
+                image.header.airmass = md['AIRMASS']
+                image.date_obs = md['DATE']
+        except Exception:
+            self.log.warn("Failed to set AIRMASS, default value of 1 used")
+            image.header.airmass = 1.
+
         return
 
     def _getImageData(self, exp):
@@ -198,7 +207,7 @@ class SpectractorShim():
         # Load config file
         # load_config(config) # now replaced by the override method above
         # Load reduced image  # xxx need to find out what "reduced" means in this context
-        image = self.spectractorImageFromLsstExposure(exp, target=target, disperser_label=disperser)
+        image = self.spectractorImageFromLsstExposure(exp, target_label=target, disperser_label=disperser)
 
         if parameters.DEBUG:
             image.plot_image(scale='log10', target_pixcoords=(xpos, ypos))
