@@ -99,7 +99,7 @@ class SpectractorShim():
         object in place where possible. Where this is not possible the methods
         are labeled _setSomething().
         """
-        file_name = '/home/mfl/lsst/Spectractor/tests/data/reduc_20170605_028.fits'
+        file_name = '/home/mfl/lsst/Spectractor/tests/data/asdasauxtel_first_light-1.fits'  # xxx REALLY needs removing
         image = Image(file_name=file_name, target_label=target_label, disperser_label=disperser_label)
 
         image.data = self._getImageData(exp)

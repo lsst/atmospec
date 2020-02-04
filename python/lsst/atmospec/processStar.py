@@ -40,6 +40,8 @@ from .extraction import SpectralExtractionTask
 from .utils import rotateExposure
 from .spectraction import SpectractorShim
 
+COMMISSIONING = True  # allows illegal things for on the mountain usage.
+
 
 class ProcessStarTaskConfig(pexConfig.Config):
     """Configuration parameters for ProcessStarTask."""
@@ -346,7 +348,14 @@ class ProcessStarTask(pipeBase.CmdLineTask):
             Butler reference of the detector and visit
         """
         self.log.info("Processing %s" % (dataRef.dataId))
-        exposure = self.isr.runDataRef(dataRef).exposure
+        # import ipdb as pdb; pdb.set_trace()
+        if COMMISSIONING:
+            from lsst.rapid.analysis.bestEffort import BestEffortIsr  # import here because not part of DM
+            bestEffort = BestEffortIsr(butler=dataRef.getButler())
+            exposure = bestEffort.getExposure(dataRef.dataId)
+        else:
+            exposure = self.isr.runDataRef(dataRef).exposure
+
         outputRoot = dataRef.getUri(datasetType='spectractorOutputRoot', write=True)
         visitNum = dataRef.dataId['visit']
         ret = self.run(exposure, outputRoot, visitNum)
@@ -402,11 +411,11 @@ class ProcessStarTask(pipeBase.CmdLineTask):
         # GOTO
         if True:
             overrideDict = {'SAVE': True,
-                            'OBS_NAME': 'CTIO',
+                            'OBS_NAME': 'CTIO', # xxx
                             'DEBUG': True,
                             'VERBOSE': True}
             supplementDict = {'CALLING_CODE': 'LSST_DM',
-                              'LSST_SAVEFIGPATH': '/home/mfl/atmospec_june2017repo/rerun/test/spectractorOutput/v271321775/plots/'}
+                              'LSST_SAVEFIGPATH': '/home/mfl/atmospec_june2017repo/rerun/test/spectractorOutput/v271321775/plots/'} # xxx
         else:
             overrideDict = {}
             supplementDict = {}
@@ -418,11 +427,10 @@ class ProcessStarTask(pipeBase.CmdLineTask):
         self.log.info(f"Centroid of main star at: {sourceCentroid!r}")
 
         spectractor = SpectractorShim(overrideDict, supplementDict)
-        disperser = 'Ron90'
+        disperser = 'ronchi90lpmm'
         target = 'HD107696'
         # xpos = 814
         # ypos = 585
-        # xpos
 
         xpos = sourceCentroid[0]
         ypos = sourceCentroid[1]
