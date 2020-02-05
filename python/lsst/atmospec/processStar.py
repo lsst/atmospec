@@ -427,7 +427,10 @@ class ProcessStarTask(pipeBase.CmdLineTask):
         sourceCentroid = self.findMainSource(exp)
         self.log.info(f"Centroid of main star at: {sourceCentroid!r}")
 
-        spectractor = SpectractorShim(overrideDict, supplementDict)
+        configFilename = '/home/mfl/lsst/Spectractor/config/auxtel.ini'
+        spectractor = SpectractorShim(configFile=configFilename,
+                                      paramOverrides=overrideDict,
+                                      supplementaryParameters=supplementDict)
         disperser = 'ronchi90lpmm'
         target = 'HD107696'
         # xpos = 814
