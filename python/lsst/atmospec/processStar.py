@@ -348,7 +348,6 @@ class ProcessStarTask(pipeBase.CmdLineTask):
             Butler reference of the detector and visit
         """
         self.log.info("Processing %s" % (dataRef.dataId))
-        # import ipdb as pdb; pdb.set_trace()
         if COMMISSIONING:
             from lsst.rapid.analysis.bestEffort import BestEffortIsr  # import here because not part of DM
             bestEffort = BestEffortIsr(butler=dataRef.getButler())
@@ -411,17 +410,19 @@ class ProcessStarTask(pipeBase.CmdLineTask):
         # GOTO
         if True:
             overrideDict = {'SAVE': True,
-                            'OBS_NAME': 'CTIO', # xxx
+                            'OBS_NAME': 'AUXTEL',
                             'DEBUG': True,
                             'VERBOSE': True}
             supplementDict = {'CALLING_CODE': 'LSST_DM',
-                              'LSST_SAVEFIGPATH': '/home/mfl/atmospec_june2017repo/rerun/test/spectractorOutput/v271321775/plots/'} # xxx
+                              'LSST_SAVEFIGPATH': '/home/mfl/temp_plots_spectractor/'}  # xxx set in code
         else:
             overrideDict = {}
             supplementDict = {}
 
         # if self.config.dispersionDirection == 'x':
             # exp = rotateExposure(exp, 270)
+
+        overrideDict['DISTANCE2CCD'] = 175  # xxx change to a calculation based on LINPOS
 
         sourceCentroid = self.findMainSource(exp)
         self.log.info(f"Centroid of main star at: {sourceCentroid!r}")
