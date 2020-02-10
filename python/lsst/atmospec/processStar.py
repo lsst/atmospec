@@ -337,7 +337,7 @@ class ProcessStarTask(pipeBase.CmdLineTask):
         return source.getCentroid()
 
     def runDataRef(self, dataRef):
-        """Run the ProcessStarTask on a ButlerDataRef for a single visit.
+        """Run the ProcessStarTask on a ButlerDataRef for a single exposure.
 
         Runs isr to get the postISR exposure from the dataRef and passes this
         to the run() method.
@@ -345,7 +345,7 @@ class ProcessStarTask(pipeBase.CmdLineTask):
         Parameters
         ----------
         dataRef : `daf.persistence.butlerSubset.ButlerDataRef`
-            Butler reference of the detector and visit
+            Butler reference of the detector and exposure ID
         """
         self.log.info("Processing %s" % (dataRef.dataId))
         if COMMISSIONING:
@@ -356,8 +356,8 @@ class ProcessStarTask(pipeBase.CmdLineTask):
             exposure = self.isr.runDataRef(dataRef).exposure
 
         outputRoot = dataRef.getUri(datasetType='spectractorOutputRoot', write=True)
-        visitNum = dataRef.dataId['visit']
-        ret = self.run(exposure, outputRoot, visitNum)
+        expId = dataRef.dataId['expId']
+        ret = self.run(exposure, outputRoot, expId)
         self.log.info("Finished processing %s" % (dataRef.dataId))
 
         return ret
@@ -367,7 +367,7 @@ class ProcessStarTask(pipeBase.CmdLineTask):
             input("Press return to continue...")
         return
 
-    def run(self, exp, spectractorOutputRoot, visitNum):
+    def run(self, exp, spectractorOutputRoot, expId):
         """Calculate the wavelength calibrated 1D spectrum from a postISRCCD.
 
         An outline of the steps in the processing is as follows:
@@ -412,7 +412,10 @@ class ProcessStarTask(pipeBase.CmdLineTask):
             overrideDict = {'SAVE': True,
                             'OBS_NAME': 'AUXTEL',
                             'DEBUG': True,
-                            'VERBOSE': True}
+                            'DISPLAY': True,
+                            'VERBOSE': True,
+                            # 'CCD_IMSIZE': 4000}
+                            }
             supplementDict = {'CALLING_CODE': 'LSST_DM',
                               'LSST_SAVEFIGPATH': '/home/mfl/temp_plots_spectractor/'}  # xxx set in code
         else:
@@ -427,19 +430,21 @@ class ProcessStarTask(pipeBase.CmdLineTask):
         sourceCentroid = self.findMainSource(exp)
         self.log.info(f"Centroid of main star at: {sourceCentroid!r}")
 
+        # Note - flow is that the config file is loaded, then overrides are
+        # applied, then supplements are set.
         configFilename = '/home/mfl/lsst/Spectractor/config/auxtel.ini'
         spectractor = SpectractorShim(configFile=configFilename,
                                       paramOverrides=overrideDict,
                                       supplementaryParameters=supplementDict)
         disperser = 'ronchi90lpmm'
         target = 'HD107696'
-        # xpos = 814
-        # ypos = 585
 
-        xpos = sourceCentroid[0]
-        ypos = sourceCentroid[1]
+        # xpos = sourceCentroid[0]  # reinstantiate these
+        # ypos = sourceCentroid[1]
+
+        xpos, ypos = 1600, 2293  # xxx remove these
         # xxx need to remove target and disperser and get from butler (fake) and exp info
-        spectractor.run(exp, xpos, ypos, target, disperser, spectractorOutputRoot, visitNum)
+        spectractor.run(exp, xpos, ypos, target, disperser, spectractorOutputRoot, expId)
 
         return
 

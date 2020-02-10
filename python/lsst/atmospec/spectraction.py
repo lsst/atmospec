@@ -25,6 +25,7 @@ import os
 import numpy as np
 
 from spectractor import parameters
+from spectractor.config import load_config
 from spectractor.extractor.images import Image, find_target, turn_image
 from spectractor.extractor.spectrum import (Spectrum, extract_spectrum_from_image, calibrate_spectrum,
                                             calibrate_spectrum_with_lines)
@@ -38,8 +39,13 @@ class SpectractorShim():
 
     This is designed to provide an implementation of the top-level function in
     Spectractor.spectractor.extractor.extractor.Spectractor()."""
+    TRANSPOSE = True
 
-    def __init__(self, paramOverrides=None, supplementaryParameters=None):
+    # leading * for kwargs only in constructor
+    def __init__(self, *, configFile=None, paramOverrides=None, supplementaryParameters=None):
+        if configFile:
+            print(f"Loading config from {configFile}")
+            load_config(configFile)
         self.log = lsstLog.getLogger(__name__)
         if paramOverrides is not None:
             self.overrideParameters(paramOverrides)
@@ -66,6 +72,7 @@ class SpectractorShim():
                 setattr(parameters, k, v)
             else:
                 self.log.warn("Did not find attribute %s in parameters" % k)
+                raise RuntimeError(f"{k} not set to {v} {self.dumpParameters()}")
 
     def supplementParameters(self, supplementaryItems):
         """Dict of Spectractor parameters to add to the parameters.
@@ -91,6 +98,12 @@ class SpectractorShim():
             else:
                 setattr(parameters, k, v)
 
+    @staticmethod
+    def dumpParameters():
+        for item in dir(parameters):
+            if not item.startswith("__"):
+                print(item, getattr(parameters, item))
+
     def spectractorImageFromLsstExposure(self, exp, target_label='', disperser_label=''):
         """Construct a Spectractor Image object from LSST objects.
 
@@ -103,15 +116,20 @@ class SpectractorShim():
         image = Image(file_name=file_name, target_label=target_label, disperser_label=disperser_label)
 
         image.data = self._getImageData(exp)
-        image.read_out_noise = self._readNoiseFromExp(exp, 12)
-        # xxx remove hard coding of 3 below!
-        image.gain = self._gainFromExp(exp, 3)  # gain required for calculating stat err
+        self._setReadNoiseFromExp(image, exp, 1)
+        # xxx remove hard coding of 1 below!
+        image.gain = self._setGainFromExp(image, exp, .85)  # gain required for calculating stat err
         self._setStatErrorInImage(image, exp, useExpVariance=False)
         # image.coord as an astropy SkyCoord - currently unused
 
-        image.expo = exp.getInfo().getVisitInfo().getExposureTime()
+        self._setImageAndHeaderInfo(image, exp)  # sets image attributes
 
-        self._setImageAndHeaderInfo(image, exp)
+        # image.expo = exp.getInfo().getVisitInfo().getExposureTime()  # set in header setter
+        assert image.expo is not None
+        assert image.expo != 0
+        assert image.expo > 0
+
+        image.convert_to_ADU_rate_units()  # divides by expTime and sets units to "ADU/s"
 
         image.disperser = Hologram(disperser_label, D=parameters.DISTANCE2CCD,
                                    data_dir=parameters.DISPERSER_DIR, verbose=parameters.VERBOSE)
@@ -120,16 +138,18 @@ class SpectractorShim():
     def _setImageAndHeaderInfo(self, image, exp, useVisitInfo=False):
         # currently set in spectractor.tools.extract_info_from_CTIO_header()
         filterName = exp.getFilter().getName()
-        if len(filterName.split('+')) == 1:
+        if len(filterName.split('~')) == 1:
             filt1 = filterName
             filt2 = exp.getInfo().getMetadata()['GRATING']
         else:
-            filt1, filt2 = filterName.split('+')
+            filt1, filt2 = filterName.split('~')  # import the delimiter from obs_package xxx
 
         image.header.filter = filt1
         image.header.disperser_label = filt2
-        # exp time is set in object attribute too, i.e. image.expo
+
+        # exp time must be set in both header and in object attribute
         image.header.expo = exp.getInfo().getVisitInfo().getExposureTime()
+        image.expo = exp.getInfo().getVisitInfo().getExposureTime()
 
         image.header['LSHIFT'] = 0.  # check if necessary
         image.header['D2CCD'] = parameters.DISTANCE2CCD  # necessary MFL
@@ -150,27 +170,35 @@ class SpectractorShim():
         return
 
     def _getImageData(self, exp):
+        if self.TRANSPOSE:
+            return exp.maskedImage.image.array.T[:, ::-1]
         return exp.maskedImage.image.array
 
-    def _readNoiseFromExp(self, exp, constValue=None):
+    def _setReadNoiseFromExp(self, spectractorImage, exp, constValue=None):
         # xxx need to implement this properly
-        if constValue:
-            return np.ones_like(exp.maskedImage.image.array) * constValue
-        return np.ones_like(exp.maskedImage.image.array)
+        if constValue is not None:
+            spectractorImage.read_out_noise = np.ones_like(spectractorImage.data) * constValue
+        else:
+            raise NotImplementedError("Setting noise image from exp variance not implemented")
+            # spectractorImage.read_out_noise = np.ones_like(spectractorImage.data)
+            # spectractorImage.read_out_noise = exp.variance.array
+
+    def _setReadNoiseToNone(self, spectractorImage):
+        spectractorImage.read_out_noise = None
 
     def _setStatErrorInImage(self, image, exp, useExpVariance=False):
         if useExpVariance:
-            image.stat_errors = exp.maskedImage.variance.array
+            image.stat_errors = exp.maskedImage.variance.array  # xxx need to deal with TRANSPOSE here
         else:
             image.compute_statistical_error()
 
-    def _gainFromExp(self, exp, constValue=None):
+    def _setGainFromExp(self, spectractorImage, exp, constValue=None):
         # xxx need to implement this properly
         # Note that this is array-like and per-amplifier
         # so could use the code from gain flats
         if constValue:
-            return np.ones_like(exp.maskedImage.image.array) * constValue
-        return np.ones_like(exp.maskedImage.image.array)
+            return np.ones_like(spectractorImage.data) * constValue
+        return np.ones_like(spectractorImage.data)
 
     def _makePath(self, dirname, plotting=True):
         if plotting:
@@ -187,7 +215,7 @@ class SpectractorShim():
         #         if k not in header:
         #             header[k] = v
 
-    def run(self, exp, xpos, ypos, target, disperser, outputRoot, visitNum):
+    def run(self, exp, xpos, ypos, target, disperser, outputRoot, expId):
 
         # run option kwargs in the original code - do something with these
         atmospheric_lines = True
@@ -200,9 +228,9 @@ class SpectractorShim():
         self._makePath(outputRoot, plotting=True)  # early in case this fails, as processing is slow
 
         # xxx if/when objects are returned, change these to butler.put()
-        outputFilenameSpectrum = os.path.join(outputRoot, 'v'+str(visitNum)+'_spectrum.fits')
-        outputFilenameSpectrogram = os.path.join(outputRoot, 'v'+str(visitNum)+'_spectrogram.fits')
-        outputFilenamePsf = os.path.join(outputRoot, 'v'+str(visitNum)+'_table.csv')
+        outputFilenameSpectrum = os.path.join(outputRoot, 'v'+str(expId)+'_spectrum.fits')
+        outputFilenameSpectrogram = os.path.join(outputRoot, 'v'+str(expId)+'_spectrogram.fits')
+        outputFilenamePsf = os.path.join(outputRoot, 'v'+str(expId)+'_table.csv')
 
         # Load config file
         # load_config(config) # now replaced by the override method above
