@@ -35,9 +35,9 @@ import lsst.pipe.base as pipeBase
 import lsst.afw.detection as afwDetect
 import lsst.afw.geom as afwGeom
 
-from .dispersion import DispersionRelation
-from .extraction import SpectralExtractionTask
-from .utils import rotateExposure
+# from .dispersion import DispersionRelation
+# from .extraction import SpectralExtractionTask
+# from .utils import rotateExposure
 from .spectraction import SpectractorShim
 
 COMMISSIONING = True  # allows illegal things for on the mountain usage.
@@ -50,10 +50,10 @@ class ProcessStarTaskConfig(pexConfig.Config):
         target=IsrTask,
         doc="Task to perform instrumental signature removal",
     )
-    extraction = pexConfig.ConfigurableField(
-        target=SpectralExtractionTask,
-        doc="Task to perform spectral extractions",
-    )
+    # extraction = pexConfig.ConfigurableField(
+    #     target=SpectralExtractionTask,
+    #     doc="Task to perform spectral extractions",
+    # )
     doWrite = pexConfig.Field(
         dtype=bool,
         doc="Write out the results?",
@@ -147,6 +147,13 @@ class ProcessStarTaskConfig(pexConfig.Config):
         doc="Repair cosmic rays?",
         default=True
     )
+    forceObjectName = pexConfig.Field(
+        dtype=str,
+        doc="A supplementary name for OBJECT. Will be forced to apply to ALL visits, so this should only"
+            " ONLY be used for immediate commissioning debug purposes. All long term fixes should be"
+            " supplied as header fixup yaml files.",
+        default=""
+    )
 
 
 class ProcessStarTask(pipeBase.CmdLineTask):
@@ -161,7 +168,7 @@ class ProcessStarTask(pipeBase.CmdLineTask):
     def __init__(self, *args, **kwargs):
         super().__init__(**kwargs)
         self.makeSubtask("isr")
-        self.makeSubtask("extraction")
+        # self.makeSubtask("extraction")
 
         self.debug = lsstDebug.Info(__name__)
         if self.debug.enabled:
@@ -312,7 +319,7 @@ class ProcessStarTask(pipeBase.CmdLineTask):
 
         Notes
         -----
-        Behaviour of this method is controlled by many task config params
+        Behavior of this method is controlled by many task config params
         including, for the detection stage:
         config.mainStarNpixMin
         config.mainStarNsigma
@@ -333,7 +340,7 @@ class ProcessStarTask(pipeBase.CmdLineTask):
         else:
             # should be impossible as this is a choice field, but still
             raise RuntimeError(f"Invalid source finding method"
-                               "selected: {self.mainSourceFindingMethod}")
+                               "selected: {self.config.mainSourceFindingMethod}")
         return source.getCentroid()
 
     def runDataRef(self, dataRef):
@@ -412,7 +419,7 @@ class ProcessStarTask(pipeBase.CmdLineTask):
             overrideDict = {'SAVE': True,
                             'OBS_NAME': 'AUXTEL',
                             'DEBUG': True,
-                            'DISPLAY': True,
+                            'DISPLAY': False,
                             'VERBOSE': True,
                             # 'CCD_IMSIZE': 4000}
                             }
@@ -422,10 +429,7 @@ class ProcessStarTask(pipeBase.CmdLineTask):
             overrideDict = {}
             supplementDict = {}
 
-        # if self.config.dispersionDirection == 'x':
-            # exp = rotateExposure(exp, 270)
-
-        overrideDict['DISTANCE2CCD'] = 175  # xxx change to a calculation based on LINPOS
+        overrideDict['DISTANCE2CCD'] = 175  # TODO: change to a calculation based on LINPOS
 
         sourceCentroid = self.findMainSource(exp)
         self.log.info(f"Centroid of main star at: {sourceCentroid!r}")
@@ -438,48 +442,23 @@ class ProcessStarTask(pipeBase.CmdLineTask):
                                       supplementaryParameters=supplementDict)
 
         target = exp.getMetadata()['OBJECT']
+        if self.config.forceObjectName:
+            self.log.warn(f"Forcing target name from {target} to {self.config.forceObjectName}")
+            target = self.config.forceObjectName
 
-        xpos = sourceCentroid[0]
-        ypos = sourceCentroid[1]
-
-        # spectrumBBox = self.calcSpectrumBBox(exp, sourceCentroid, self.config.aperture,
-        #                                      self.config.spectralOrder)
-
-        # self.log.info("Spectrum bbox = {}".format(spectrumBBox))
+        if target in ['FlatField position', 'Park position', 'Test', 'NOTSET']:
+            raise ValueError(f"OBJECT set to {target} - this is not a celestial object!")
 
         if self.debug.display and 'raw' in self.debug.displayItems:
             self.disp1.mtv(exp)
             self.disp1.dot('x', sourceCentroid[0], sourceCentroid[1], size=100)
             self.log.info("Showing full postISR image")
             self.log.info(f"Centroid of main star at: {sourceCentroid}")
-            # self.log.info(f"Spectrum bbox will be at: {spectrumBBox!r}")
             self.pause()
-        # if self.debug.display and 'spectrum' in self.debug.displayItems:
-        #     self.log.info(f"Showing spectrum image using bbox {spectrumBBox!r}")
-        #     self.disp1.mtv(exp[spectrumBBox])
-        #     self.pause()
 
-        spectractor.run(exp, xpos, ypos, target, spectractorOutputRoot, expId)
+        spectractor.run(exp, sourceCentroid[0], sourceCentroid[1], target, spectractorOutputRoot, expId)
 
         return
-
-        disp = DispersionRelation(None, [2, 4, 6])
-
-        if self.config.doFlat:
-            exp = self.flatfield(exp, disp)
-
-        if self.config.doCosmics:
-            exp = self.repairCosmics(exp, disp)
-
-        self.returnForNotebook = [exp, spectrumBBox]  # xxx remove this, just for notebook playing
-
-        # ridgeline = self.calcRidgeline(exp, spectrumBBox)
-
-        spectrum = self.measureSpectrum(exp, sourceCentroid, spectrumBBox, disp)
-
-        self.returnForNotebook.append(spectrum)
-
-        return self.returnForNotebook
 
     def flatfield(self, exp, disp):
         """Placeholder for wavelength dependent flatfielding: TODO: DM-18141
