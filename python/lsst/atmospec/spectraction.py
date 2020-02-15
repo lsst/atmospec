@@ -135,17 +135,23 @@ class SpectractorShim():
                                    data_dir=parameters.DISPERSER_DIR, verbose=parameters.VERBOSE)
         return image
 
-    def _setImageAndHeaderInfo(self, image, exp, useVisitInfo=False):
-        # currently set in spectractor.tools.extract_info_from_CTIO_header()
+    @staticmethod
+    def _getFilterAndDisperserFromExp(exp):
         filterName = exp.getFilter().getName()
         if len(filterName.split('~')) == 1:
             filt1 = filterName
             filt2 = exp.getInfo().getMetadata()['GRATING']
         else:
-            filt1, filt2 = filterName.split('~')  # import the delimiter from obs_package xxx
+            filt1, filt2 = filterName.split('~')  # TODO: import the delimiter from obs_package
 
-        image.header.filter = filt1
-        image.header.disperser_label = filt2
+        return filt1, filt2
+
+    def _setImageAndHeaderInfo(self, image, exp, useVisitInfo=False):
+        # currently set in spectractor.tools.extract_info_from_CTIO_header()
+        filt, disperser = self._getFilterAndDisperserFromExp(exp)
+
+        image.header.filter = filt
+        image.header.disperser_label = disperser
 
         # exp time must be set in both header and in object attribute
         image.header.expo = exp.getInfo().getVisitInfo().getExposureTime()
@@ -215,13 +221,31 @@ class SpectractorShim():
         #         if k not in header:
         #             header[k] = v
 
-    def run(self, exp, xpos, ypos, target, disperser, outputRoot, expId):
+    @staticmethod
+    def transposeCentroid(dmXpos, dmYpos, image):
+        xSize, ySize = image.data.shape
+
+        newX = dmXpos
+        newY = -(dmYpos - ySize)
+        return newY, newX
+
+    def displayImage(self, image, centroid=None):
+        import lsst.afw.image as afwImage
+        import lsst.afw.display as afwDisp
+        disp1 = afwDisp.Display(987, open=True)
+
+        tempImg = afwImage.ImageF(np.zeros(image.data.shape, dtype=np.float32))
+        tempImg.array[:] = image.data
+
+        disp1.mtv(tempImg)
+        if centroid:
+            disp1.dot('x', centroid[0], centroid[1], size=100)
+
+    def run(self, exp, xpos, ypos, target, outputRoot, expId):
 
         # run option kwargs in the original code - do something with these
         atmospheric_lines = True
         line_detection = True
-
-        # need to make a fake butler here to get these
 
         self.log.info('Starting SPECTRACTOR')
         # xxx change plotting to an option?
@@ -233,12 +257,17 @@ class SpectractorShim():
         outputFilenamePsf = os.path.join(outputRoot, 'v'+str(expId)+'_table.csv')
 
         # Load config file
-        # load_config(config) # now replaced by the override method above
-        # Load reduced image  # xxx need to find out what "reduced" means in this context
+
+        filt, disperser = self._getFilterAndDisperserFromExp(exp)
         image = self.spectractorImageFromLsstExposure(exp, target_label=target, disperser_label=disperser)
 
         if parameters.DEBUG:
             image.plot_image(scale='log10', target_pixcoords=(xpos, ypos))
+
+        if self.TRANSPOSE:
+            xpos, ypos = self.transposeCentroid(xpos, ypos, image)
+
+        self.displayImage(image, centroid=(xpos, ypos))
 
         # Find the exact target position in the raw cut image: several methods
 
@@ -281,7 +310,7 @@ class SpectractorShim():
         spectrum.save_spectrum(outputFilenameSpectrum, overwrite=True)
         spectrum.save_spectrogram(outputFilenameSpectrogram, overwrite=True)
         # Plot the spectrum
-        import ipdb as pdb; pdb.set_trace()
+
         if parameters.VERBOSE and parameters.DISPLAY:
             spectrum.plot_spectrum(xlim=None)
         distance = spectrum.chromatic_psf.get_distance_along_dispersion_axis()

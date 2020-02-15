@@ -436,34 +436,32 @@ class ProcessStarTask(pipeBase.CmdLineTask):
         spectractor = SpectractorShim(configFile=configFilename,
                                       paramOverrides=overrideDict,
                                       supplementaryParameters=supplementDict)
-        disperser = 'ronchi90lpmm'
-        target = 'HD107696'
 
-        # xpos = sourceCentroid[0]  # reinstantiate these
-        # ypos = sourceCentroid[1]
+        target = exp.getMetadata()['OBJECT']
 
-        xpos, ypos = 1600, 2293  # xxx remove these
-        # xxx need to remove target and disperser and get from butler (fake) and exp info
-        spectractor.run(exp, xpos, ypos, target, disperser, spectractorOutputRoot, expId)
+        xpos = sourceCentroid[0]
+        ypos = sourceCentroid[1]
 
-        return
+        # spectrumBBox = self.calcSpectrumBBox(exp, sourceCentroid, self.config.aperture,
+        #                                      self.config.spectralOrder)
 
-        spectrumBBox = self.calcSpectrumBBox(exp, sourceCentroid, self.config.aperture,
-                                             self.config.spectralOrder)
-
-        self.log.info("Spectrum bbox = {}".format(spectrumBBox))
+        # self.log.info("Spectrum bbox = {}".format(spectrumBBox))
 
         if self.debug.display and 'raw' in self.debug.displayItems:
             self.disp1.mtv(exp)
             self.disp1.dot('x', sourceCentroid[0], sourceCentroid[1], size=100)
             self.log.info("Showing full postISR image")
             self.log.info(f"Centroid of main star at: {sourceCentroid}")
-            self.log.info(f"Spectrum bbox will be at: {spectrumBBox!r}")
+            # self.log.info(f"Spectrum bbox will be at: {spectrumBBox!r}")
             self.pause()
-        if self.debug.display and 'spectrum' in self.debug.displayItems:
-            self.log.info(f"Showing spectrum image using bbox {spectrumBBox!r}")
-            self.disp1.mtv(exp[spectrumBBox])
-            self.pause()
+        # if self.debug.display and 'spectrum' in self.debug.displayItems:
+        #     self.log.info(f"Showing spectrum image using bbox {spectrumBBox!r}")
+        #     self.disp1.mtv(exp[spectrumBBox])
+        #     self.pause()
+
+        spectractor.run(exp, xpos, ypos, target, spectractorOutputRoot, expId)
+
+        return
 
         disp = DispersionRelation(None, [2, 4, 6])
 
