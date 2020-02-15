@@ -222,6 +222,12 @@ class SpectractorShim():
         #             header[k] = v
 
     @staticmethod
+    def flipImageLeftRight(image, xpos, ypos):
+        image.data = np.flip(image.data, 1)
+        xpos = image.data.shape[1] - xpos
+        return image, xpos, ypos
+
+    @staticmethod
     def transposeCentroid(dmXpos, dmYpos, image):
         xSize, ySize = image.data.shape
 
@@ -267,7 +273,9 @@ class SpectractorShim():
         if self.TRANSPOSE:
             xpos, ypos = self.transposeCentroid(xpos, ypos, image)
 
-        self.displayImage(image, centroid=(xpos, ypos))
+        if disperser == 'ronchi170lpmm':  # TODO: add something more robust as to whether to flip!
+            image, xpos, ypos = self.flipImageLeftRight(image, xpos, ypos)
+            self.displayImage(image, centroid=(xpos, ypos))
 
         # Find the exact target position in the raw cut image: several methods
 
@@ -311,6 +319,7 @@ class SpectractorShim():
         spectrum.save_spectrogram(outputFilenameSpectrogram, overwrite=True)
         # Plot the spectrum
 
+        parameters.DISPLAY = True
         if parameters.VERBOSE and parameters.DISPLAY:
             spectrum.plot_spectrum(xlim=None)
         distance = spectrum.chromatic_psf.get_distance_along_dispersion_axis()
