@@ -23,6 +23,7 @@
 
 __all__ = ['ProcessStarTask', 'ProcessStarTaskConfig']
 
+import os
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
@@ -363,6 +364,10 @@ class ProcessStarTask(pipeBase.CmdLineTask):
             exposure = self.isr.runDataRef(dataRef).exposure
 
         outputRoot = dataRef.getUri(datasetType='spectractorOutputRoot', write=True)
+        if not os.path.exists(outputRoot):
+            os.makedirs(outputRoot)
+            if not os.path.exists(outputRoot):
+                raise RuntimeError(f"Failed to create output dir {outputRoot}")
         expId = dataRef.dataId['expId']
         ret = self.run(exposure, outputRoot, expId)
         self.log.info("Finished processing %s" % (dataRef.dataId))
@@ -413,52 +418,53 @@ class ProcessStarTask(pipeBase.CmdLineTask):
         spectrum : `lsst.atmospec.spectrum` - TODO: DM-18133
             The wavelength-calibrated 1D stellar spectrum
         """
+        pdfPath = os.path.join(spectractorOutputRoot, 'plots.pdf')
+        with PdfPages(pdfPath) as pdf:
+            if True:
+                overrideDict = {'SAVE': True,
+                                'OBS_NAME': 'AUXTEL',
+                                'DEBUG': True,
+                                'DISPLAY': False,
+                                'VERBOSE': True,
+                                # 'CCD_IMSIZE': 4000}
+                                }
+                supplementDict = {'CALLING_CODE': 'LSST_DM',
+                                  'LSST_SAVEFIGPATH': spectractorOutputRoot,
+                                  'PdfPages': pdf}
+            else:
+                overrideDict = {}
+                supplementDict = {}
 
-        # GOTO
-        if True:
-            overrideDict = {'SAVE': True,
-                            'OBS_NAME': 'AUXTEL',
-                            'DEBUG': True,
-                            'DISPLAY': False,
-                            'VERBOSE': True,
-                            # 'CCD_IMSIZE': 4000}
-                            }
-            supplementDict = {'CALLING_CODE': 'LSST_DM',
-                              'LSST_SAVEFIGPATH': '/home/mfl/temp_plots_spectractor/'}  # xxx set in code
-        else:
-            overrideDict = {}
-            supplementDict = {}
+            overrideDict['DISTANCE2CCD'] = 175  # TODO: change to a calculation based on LINPOS
 
-        overrideDict['DISTANCE2CCD'] = 175  # TODO: change to a calculation based on LINPOS
+            sourceCentroid = self.findMainSource(exp)
+            self.log.info(f"Centroid of main star at: {sourceCentroid!r}")
 
-        sourceCentroid = self.findMainSource(exp)
-        self.log.info(f"Centroid of main star at: {sourceCentroid!r}")
+            # Note - flow is that the config file is loaded, then overrides are
+            # applied, then supplements are set.
+            configFilename = '/home/mfl/lsst/Spectractor/config/auxtel.ini'
+            spectractor = SpectractorShim(configFile=configFilename,
+                                          paramOverrides=overrideDict,
+                                          supplementaryParameters=supplementDict)
 
-        # Note - flow is that the config file is loaded, then overrides are
-        # applied, then supplements are set.
-        configFilename = '/home/mfl/lsst/Spectractor/config/auxtel.ini'
-        spectractor = SpectractorShim(configFile=configFilename,
-                                      paramOverrides=overrideDict,
-                                      supplementaryParameters=supplementDict)
+            target = exp.getMetadata()['OBJECT']
+            if self.config.forceObjectName:
+                self.log.warn(f"Forcing target name from {target} to {self.config.forceObjectName}")
+                target = self.config.forceObjectName
 
-        target = exp.getMetadata()['OBJECT']
-        if self.config.forceObjectName:
-            self.log.warn(f"Forcing target name from {target} to {self.config.forceObjectName}")
-            target = self.config.forceObjectName
+            if target in ['FlatField position', 'Park position', 'Test', 'NOTSET']:
+                raise ValueError(f"OBJECT set to {target} - this is not a celestial object!")
 
-        if target in ['FlatField position', 'Park position', 'Test', 'NOTSET']:
-            raise ValueError(f"OBJECT set to {target} - this is not a celestial object!")
+            if self.debug.display and 'raw' in self.debug.displayItems:
+                self.disp1.mtv(exp)
+                self.disp1.dot('x', sourceCentroid[0], sourceCentroid[1], size=100)
+                self.log.info("Showing full postISR image")
+                self.log.info(f"Centroid of main star at: {sourceCentroid}")
+                self.pause()
 
-        if self.debug.display and 'raw' in self.debug.displayItems:
-            self.disp1.mtv(exp)
-            self.disp1.dot('x', sourceCentroid[0], sourceCentroid[1], size=100)
-            self.log.info("Showing full postISR image")
-            self.log.info(f"Centroid of main star at: {sourceCentroid}")
-            self.pause()
+            spectractor.run(exp, sourceCentroid[0], sourceCentroid[1], target, spectractorOutputRoot, expId)
 
-        spectractor.run(exp, sourceCentroid[0], sourceCentroid[1], target, spectractorOutputRoot, expId)
-
-        return
+            return
 
     def flatfield(self, exp, disp):
         """Placeholder for wavelength dependent flatfielding: TODO: DM-18141
