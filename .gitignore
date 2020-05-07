@@ -20,3 +20,4 @@ version.py
 .coverage
 bin
 .pytest_cache
+_bestfit.pdf

@@ -23,8 +23,10 @@
 
 __all__ = ['ProcessStarTask', 'ProcessStarTaskConfig']
 
+import os
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.backends.backend_pdf import PdfPages
 
 import lsstDebug
 import lsst.afw.image as afwImage
@@ -34,9 +36,9 @@ import lsst.pipe.base as pipeBase
 import lsst.afw.detection as afwDetect
 import lsst.afw.geom as afwGeom
 
-from .dispersion import DispersionRelation
-from .extraction import SpectralExtractionTask
-from .utils import rotateExposure
+from .spectraction import SpectractorShim
+
+COMMISSIONING = False  # allows illegal things for on the mountain usage.
 
 
 class ProcessStarTaskConfig(pexConfig.Config):
@@ -46,17 +48,13 @@ class ProcessStarTaskConfig(pexConfig.Config):
         target=IsrTask,
         doc="Task to perform instrumental signature removal",
     )
-    extraction = pexConfig.ConfigurableField(
-        target=SpectralExtractionTask,
-        doc="Task to perform spectral extractions",
-    )
     doWrite = pexConfig.Field(
         dtype=bool,
         doc="Write out the results?",
         default=True,
     )
     mainSourceFindingMethod = pexConfig.ChoiceField(
-        doc="Which attribute to prioritise when selecting the main source object",
+        doc="Which attribute to prioritize when selecting the main source object",
         dtype=str,
         default="BRIGHTEST",
         allowed={
@@ -143,6 +141,13 @@ class ProcessStarTaskConfig(pexConfig.Config):
         doc="Repair cosmic rays?",
         default=True
     )
+    forceObjectName = pexConfig.Field(
+        dtype=str,
+        doc="A supplementary name for OBJECT. Will be forced to apply to ALL visits, so this should only"
+            " ONLY be used for immediate commissioning debug purposes. All long term fixes should be"
+            " supplied as header fix-up yaml files.",
+        default=""
+    )
 
 
 class ProcessStarTask(pipeBase.CmdLineTask):
@@ -157,7 +162,6 @@ class ProcessStarTask(pipeBase.CmdLineTask):
     def __init__(self, *args, **kwargs):
         super().__init__(**kwargs)
         self.makeSubtask("isr")
-        self.makeSubtask("extraction")
 
         self.debug = lsstDebug.Info(__name__)
         if self.debug.enabled:
@@ -183,7 +187,7 @@ class ProcessStarTask(pipeBase.CmdLineTask):
                     self.debug.display = False
                     self.log.warn('Failed to setup/connect to display! Debug display has been disabled')
 
-        if self.debug.notheadless:
+        if self.debug.notHeadless:
             pass  # other backend options can go here
         else:  # this stop windows popping up when plotting. When headless, use 'agg' backend too
             plt.interactive(False)
@@ -308,7 +312,7 @@ class ProcessStarTask(pipeBase.CmdLineTask):
 
         Notes
         -----
-        Behaviour of this method is controlled by many task config params
+        Behavior of this method is controlled by many task config params
         including, for the detection stage:
         config.mainStarNpixMin
         config.mainStarNsigma
@@ -329,11 +333,11 @@ class ProcessStarTask(pipeBase.CmdLineTask):
         else:
             # should be impossible as this is a choice field, but still
             raise RuntimeError(f"Invalid source finding method"
-                               "selected: {self.mainSourceFindingMethod}")
+                               "selected: {self.config.mainSourceFindingMethod}")
         return source.getCentroid()
 
     def runDataRef(self, dataRef):
-        """Run the ProcessStarTask on a ButlerDataRef for a single visit.
+        """Run the ProcessStarTask on a ButlerDataRef for a single exposure.
 
         Runs isr to get the postISR exposure from the dataRef and passes this
         to the run() method.
@@ -341,11 +345,27 @@ class ProcessStarTask(pipeBase.CmdLineTask):
         Parameters
         ----------
         dataRef : `daf.persistence.butlerSubset.ButlerDataRef`
-            Butler reference of the detector and visit
+            Butler reference of the detector and exposure ID
         """
         self.log.info("Processing %s" % (dataRef.dataId))
-        exposure = self.isr.runDataRef(dataRef).exposure
-        ret = self.run(exposure)
+        if COMMISSIONING:
+            from lsst.rapid.analysis.bestEffort import BestEffortIsr  # import here because not part of DM
+            # TODO: some evidence suggests that CR repair is *significantly*
+            # degrading spectractor performance investigate this for the
+            # default task config as well as ensuring that it doesn't run here
+            # if it does turn out to be problematic.
+            bestEffort = BestEffortIsr(butler=dataRef.getButler())
+            exposure = bestEffort.getExposure(dataRef.dataId)
+        else:
+            exposure = self.isr.runDataRef(dataRef).exposure
+
+        outputRoot = dataRef.getUri(datasetType='spectractorOutputRoot', write=True)
+        if not os.path.exists(outputRoot):
+            os.makedirs(outputRoot)
+            if not os.path.exists(outputRoot):
+                raise RuntimeError(f"Failed to create output dir {outputRoot}")
+        expId = dataRef.dataId['expId']
+        ret = self.run(exposure, outputRoot, expId)
         self.log.info("Finished processing %s" % (dataRef.dataId))
 
         return ret
@@ -355,7 +375,7 @@ class ProcessStarTask(pipeBase.CmdLineTask):
             input("Press return to continue...")
         return
 
-    def run(self, exp):
+    def run(self, exp, spectractorOutputRoot, expId):
         """Calculate the wavelength calibrated 1D spectrum from a postISRCCD.
 
         An outline of the steps in the processing is as follows:
@@ -394,47 +414,53 @@ class ProcessStarTask(pipeBase.CmdLineTask):
         spectrum : `lsst.atmospec.spectrum` - TODO: DM-18133
             The wavelength-calibrated 1D stellar spectrum
         """
+        pdfPath = os.path.join(spectractorOutputRoot, 'plots.pdf')
+        with PdfPages(pdfPath) as pdf:
+            if True:
+                overrideDict = {'SAVE': True,
+                                'OBS_NAME': 'AUXTEL',
+                                'DEBUG': True,
+                                'DISPLAY': False,
+                                'VERBOSE': True,
+                                # 'CCD_IMSIZE': 4000}
+                                }
+                supplementDict = {'CALLING_CODE': 'LSST_DM',
+                                  'LSST_SAVEFIGPATH': spectractorOutputRoot,
+                                  'PdfPages': pdf}
+            else:
+                overrideDict = {}
+                supplementDict = {}
 
-        if self.config.dispersionDirection == 'x':
-            exp = rotateExposure(exp, 270)
+            overrideDict['DISTANCE2CCD'] = 175  # TODO: change to a calculation based on LINPOS
 
-        sourceCentroid = self.findMainSource(exp)
-        self.log.info(f"Centroid of main star at: {sourceCentroid!r}")
+            sourceCentroid = self.findMainSource(exp)
+            self.log.info(f"Centroid of main star at: {sourceCentroid!r}")
 
-        spectrumBBox = self.calcSpectrumBBox(exp, sourceCentroid, self.config.aperture,
-                                             self.config.spectralOrder)
+            # Note - flow is that the config file is loaded, then overrides are
+            # applied, then supplements are set.
+            configFilename = '/home/mfl/lsst/Spectractor/config/auxtel.ini'
+            spectractor = SpectractorShim(configFile=configFilename,
+                                          paramOverrides=overrideDict,
+                                          supplementaryParameters=supplementDict)
 
-        self.log.info("Spectrum bbox = {}".format(spectrumBBox))
+            target = exp.getMetadata()['OBJECT']
+            if self.config.forceObjectName:
+                self.log.warn(f"Forcing target name from {target} to {self.config.forceObjectName}")
+                target = self.config.forceObjectName
 
-        if self.debug.display and 'raw' in self.debug.displayItems:
-            self.disp1.mtv(exp)
-            self.disp1.dot('x', sourceCentroid[0], sourceCentroid[1], size=100)
-            self.log.info("Showing full postISR image")
-            self.log.info(f"Centroid of main star at: {sourceCentroid}")
-            self.log.info(f"Spectrum bbox will be at: {spectrumBBox!r}")
-            self.pause()
-        if self.debug.display and 'spectrum' in self.debug.displayItems:
-            self.log.info(f"Showing spectrum image using bbox {spectrumBBox!r}")
-            self.disp1.mtv(exp[spectrumBBox])
-            self.pause()
+            if target in ['FlatField position', 'Park position', 'Test', 'NOTSET']:
+                raise ValueError(f"OBJECT set to {target} - this is not a celestial object!")
 
-        disp = DispersionRelation(None, [2, 4, 6])
+            if self.debug.display and 'raw' in self.debug.displayItems:
+                self.disp1.mtv(exp)
+                self.disp1.dot('x', sourceCentroid[0], sourceCentroid[1], size=100)
+                self.log.info("Showing full postISR image")
+                self.log.info(f"Centroid of main star at: {sourceCentroid}")
+                self.pause()
 
-        if self.config.doFlat:
-            exp = self.flatfield(exp, disp)
+            spectractor.run(exp, sourceCentroid[0], sourceCentroid[1], target, spectractorOutputRoot, expId)
 
-        if self.config.doCosmics:
-            exp = self.repairCosmics(exp, disp)
-
-        self.returnForNotebook = [exp, spectrumBBox]  # xxx remove this, just for notebook playing
-
-        # ridgeline = self.calcRidgeline(exp, spectrumBBox)
-
-        spectrum = self.measureSpectrum(exp, sourceCentroid, spectrumBBox, disp)
-
-        self.returnForNotebook.append(spectrum)
-
-        return self.returnForNotebook
+            return
 
     def flatfield(self, exp, disp):
         """Placeholder for wavelength dependent flatfielding: TODO: DM-18141
