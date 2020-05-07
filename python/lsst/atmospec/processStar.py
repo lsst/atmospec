@@ -36,12 +36,9 @@ import lsst.pipe.base as pipeBase
 import lsst.afw.detection as afwDetect
 import lsst.afw.geom as afwGeom
 
-# from .dispersion import DispersionRelation
-# from .extraction import SpectralExtractionTask
-# from .utils import rotateExposure
 from .spectraction import SpectractorShim
 
-COMMISSIONING = True  # allows illegal things for on the mountain usage.
+COMMISSIONING = False  # allows illegal things for on the mountain usage.
 
 
 class ProcessStarTaskConfig(pexConfig.Config):
@@ -51,17 +48,13 @@ class ProcessStarTaskConfig(pexConfig.Config):
         target=IsrTask,
         doc="Task to perform instrumental signature removal",
     )
-    # extraction = pexConfig.ConfigurableField(
-    #     target=SpectralExtractionTask,
-    #     doc="Task to perform spectral extractions",
-    # )
     doWrite = pexConfig.Field(
         dtype=bool,
         doc="Write out the results?",
         default=True,
     )
     mainSourceFindingMethod = pexConfig.ChoiceField(
-        doc="Which attribute to prioritise when selecting the main source object",
+        doc="Which attribute to prioritize when selecting the main source object",
         dtype=str,
         default="BRIGHTEST",
         allowed={
@@ -152,7 +145,7 @@ class ProcessStarTaskConfig(pexConfig.Config):
         dtype=str,
         doc="A supplementary name for OBJECT. Will be forced to apply to ALL visits, so this should only"
             " ONLY be used for immediate commissioning debug purposes. All long term fixes should be"
-            " supplied as header fixup yaml files.",
+            " supplied as header fix-up yaml files.",
         default=""
     )
 
@@ -169,7 +162,6 @@ class ProcessStarTask(pipeBase.CmdLineTask):
     def __init__(self, *args, **kwargs):
         super().__init__(**kwargs)
         self.makeSubtask("isr")
-        # self.makeSubtask("extraction")
 
         self.debug = lsstDebug.Info(__name__)
         if self.debug.enabled:
