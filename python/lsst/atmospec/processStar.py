@@ -350,6 +350,10 @@ class ProcessStarTask(pipeBase.CmdLineTask):
         self.log.info("Processing %s" % (dataRef.dataId))
         if COMMISSIONING:
             from lsst.rapid.analysis.bestEffort import BestEffortIsr  # import here because not part of DM
+            # TODO: some evidence suggests that CR repair is *significantly*
+            # degrading spectractor performance investigate this for the
+            # default task config as well as ensuring that it doesn't run here
+            # if it does turn out to be problematic.
             bestEffort = BestEffortIsr(butler=dataRef.getButler())
             exposure = bestEffort.getExposure(dataRef.dataId)
         else:
