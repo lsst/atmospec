@@ -33,6 +33,8 @@ import lsst.afw.image as afwImage
 from lsst.ip.isr import IsrTask
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
+from lsst.pipe.tasks.characterizeImage import CharacterizeImageTask
+
 import lsst.afw.detection as afwDetect
 import lsst.afw.geom as afwGeom
 
@@ -47,6 +49,15 @@ class ProcessStarTaskConfig(pexConfig.Config):
     isr = pexConfig.ConfigurableField(
         target=IsrTask,
         doc="Task to perform instrumental signature removal",
+    )
+    charImage = pexConfig.ConfigurableField(
+        target=CharacterizeImageTask,
+        doc="""Task to characterize a science exposure:
+            - detect sources, usually at high S/N
+            - estimate the background, which is subtracted from the image and returned as field "background"
+            - estimate a PSF model, which is added to the exposure
+            - interpolate over defects and cosmic rays, updating the image, variance and mask planes
+            """,
     )
     doWrite = pexConfig.Field(
         dtype=bool,
@@ -149,6 +160,10 @@ class ProcessStarTaskConfig(pexConfig.Config):
         default=""
     )
 
+    def setDefaults(self):
+        self.isr.doWrite = False
+        self.charImage.doWriteExposure = False
+
 
 class ProcessStarTask(pipeBase.CmdLineTask):
     """Task for the spectral extraction of single-star dispersed images.
@@ -157,11 +172,14 @@ class ProcessStarTask(pipeBase.CmdLineTask):
     """
 
     ConfigClass = ProcessStarTaskConfig
+    RunnerClass = pipeBase.ButlerInitializedTaskRunner
     _DefaultName = "processStar"
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *, butler=None, psfRefObjLoader=None, **kwargs):
+        # TODO: rename psfRefObjLoader to refObjLoader
         super().__init__(**kwargs)
         self.makeSubtask("isr")
+        self.makeSubtask("charImage", butler=butler, refObjLoader=psfRefObjLoader)
 
         self.debug = lsstDebug.Info(__name__)
         if self.debug.enabled:
@@ -358,6 +376,13 @@ class ProcessStarTask(pipeBase.CmdLineTask):
             exposure = bestEffort.getExposure(dataRef.dataId)
         else:
             exposure = self.isr.runDataRef(dataRef).exposure
+
+        charRes = self.charImage.runDataRef(
+            dataRef=dataRef,
+            exposure=exposure,
+            doUnpersist=False,
+        )
+        exposure = charRes.exposure
 
         outputRoot = dataRef.getUri(datasetType='spectractorOutputRoot', write=True)
         if not os.path.exists(outputRoot):
