@@ -230,9 +230,8 @@ class SpectractorShim():
     @staticmethod
     def transposeCentroid(dmXpos, dmYpos, image):
         xSize, ySize = image.data.shape
-
         newX = dmXpos
-        newY = -(dmYpos - ySize)
+        newY = ySize - dmYpos  # image is also flipped in Y
         return newY, newX
 
     def displayImage(self, image, centroid=None):
@@ -266,12 +265,12 @@ class SpectractorShim():
 
         filt, disperser = self._getFilterAndDisperserFromExp(exp)
         image = self.spectractorImageFromLsstExposure(exp, target_label=target, disperser_label=disperser)
+        if self.TRANSPOSE:
+            xpos, ypos = self.transposeCentroid(xpos, ypos, image)
 
         if parameters.DEBUG:
             image.plot_image(scale='log10', target_pixcoords=(xpos, ypos))
-
-        if self.TRANSPOSE:
-            xpos, ypos = self.transposeCentroid(xpos, ypos, image)
+            self.log.info(f"Pixel value at centroid = {image.data[int(ypos), int(xpos)]}")
 
         if disperser == 'ronchi170lpmm':  # TODO: add something more robust as to whether to flip!
             image, xpos, ypos = self.flipImageLeftRight(image, xpos, ypos)
