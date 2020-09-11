@@ -178,6 +178,7 @@ class ProcessStarTaskConfig(pexConfig.Config):
         #     self.charImage.measurePsf.starSelector['objectSize'].signalToNoiseMin = 10.0
         #     self.charImage.measurePsf.starSelector['objectSize'].fluxMin = 5000.0
         self.charImage.detection.includeThresholdMultiplier = 3
+        self.isr.overscan.fitType = 'MEDIAN_PER_ROW'
 
 
 class ProcessStarTask(pipeBase.CmdLineTask):
