@@ -28,11 +28,21 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 
+from astroquery.simbad import Simbad
+import astropy.units as u
+from astropy.coordinates import SkyCoord
+
 import lsstDebug
 import lsst.afw.image as afwImage
+from lsst.afw.image.utils import defineFilter
+import lsst.geom as geom
 from lsst.ip.isr import IsrTask
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
+from lsst.pipe.tasks.characterizeImage import CharacterizeImageTask
+from lsst.meas.algorithms import LoadIndexedReferenceObjectsTask, MagnitudeLimit
+from lsst.meas.astrom import AstrometryTask, FitAffineWcsTask
+
 import lsst.afw.detection as afwDetect
 import lsst.afw.geom as afwGeom
 
@@ -47,6 +57,15 @@ class ProcessStarTaskConfig(pexConfig.Config):
     isr = pexConfig.ConfigurableField(
         target=IsrTask,
         doc="Task to perform instrumental signature removal",
+    )
+    charImage = pexConfig.ConfigurableField(
+        target=CharacterizeImageTask,
+        doc="""Task to characterize a science exposure:
+            - detect sources, usually at high S/N
+            - estimate the background, which is subtracted from the image and returned as field "background"
+            - estimate a PSF model, which is added to the exposure
+            - interpolate over defects and cosmic rays, updating the image, variance and mask planes
+            """,
     )
     doWrite = pexConfig.Field(
         dtype=bool,
@@ -148,6 +167,23 @@ class ProcessStarTaskConfig(pexConfig.Config):
             " supplied as header fix-up yaml files.",
         default=""
     )
+    referenceFilterOverride = pexConfig.Field(
+        dtype=str,
+        doc="Which filter in the reference catalog to match to?",
+        default="phot_g_mean"
+    )
+
+    def setDefaults(self):
+        self.isr.doWrite = False
+        self.charImage.doWriteExposure = False
+
+        self.charImage.doApCorr = False
+        self.charImage.doMeasurePsf = False
+        # if self.charImage.doMeasurePsf:
+        #     self.charImage.measurePsf.starSelector['objectSize'].signalToNoiseMin = 10.0
+        #     self.charImage.measurePsf.starSelector['objectSize'].fluxMin = 5000.0
+        self.charImage.detection.includeThresholdMultiplier = 3
+        self.isr.overscan.fitType = 'MEDIAN_PER_ROW'
 
 
 class ProcessStarTask(pipeBase.CmdLineTask):
@@ -157,11 +193,14 @@ class ProcessStarTask(pipeBase.CmdLineTask):
     """
 
     ConfigClass = ProcessStarTaskConfig
+    RunnerClass = pipeBase.ButlerInitializedTaskRunner
     _DefaultName = "processStar"
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *, butler=None, psfRefObjLoader=None, **kwargs):
+        # TODO: rename psfRefObjLoader to refObjLoader
         super().__init__(**kwargs)
         self.makeSubtask("isr")
+        self.makeSubtask("charImage", butler=butler, refObjLoader=psfRefObjLoader)
 
         self.debug = lsstDebug.Info(__name__)
         if self.debug.enabled:
@@ -347,7 +386,10 @@ class ProcessStarTask(pipeBase.CmdLineTask):
         dataRef : `daf.persistence.butlerSubset.ButlerDataRef`
             Butler reference of the detector and exposure ID
         """
+        butler = dataRef.getButler()
+        dataId = dataRef.dataId
         self.log.info("Processing %s" % (dataRef.dataId))
+
         if COMMISSIONING:
             from lsst.rapid.analysis.bestEffort import BestEffortIsr  # import here because not part of DM
             # TODO: some evidence suggests that CR repair is *significantly*
@@ -355,9 +397,36 @@ class ProcessStarTask(pipeBase.CmdLineTask):
             # default task config as well as ensuring that it doesn't run here
             # if it does turn out to be problematic.
             bestEffort = BestEffortIsr(butler=dataRef.getButler())
-            exposure = bestEffort.getExposure(dataRef.dataId)
+            exposure = bestEffort.getExposure(dataId)
         else:
-            exposure = self.isr.runDataRef(dataRef).exposure
+            if butler.datasetExists('postISRCCD', dataId):
+                exposure = butler.get('postISRCCD', dataId)
+                self.log.info("Loaded postISRCCD from disk")
+            else:
+                exposure = self.isr.runDataRef(dataRef).exposure
+                butler.put(exposure, 'postISRCCD', dataId)
+
+        if butler.datasetExists('icExp', dataId) and butler.datasetExists('icSrc', dataId):
+            exposure = butler.get('icExp', dataId)
+            icSrc = butler.get('icSrc', dataId)
+            self.log.info("Loaded icExp and icSrc from disk")
+        else:
+            charRes = self.charImage.runDataRef(dataRef=dataRef, exposure=exposure, doUnpersist=False)
+            exposure = charRes.exposure
+            icSrc = charRes.sourceCat
+            butler.put(exposure, 'icExp', dataId)
+            butler.put(icSrc, 'icSrc', dataId)
+
+        goodWcs = False
+        if butler.datasetExists('calexp', dataId):
+            exposure = butler.get('calexp', dataId)
+            self.log.info("Loaded calexp from disk")
+            goodWcs = True  # only saved if previous fit succeeded
+        else:
+            astromResult = self.runAstrometry(butler, exposure, icSrc)
+            if astromResult and astromResult.scatterOnSky.asArcseconds() < 1:
+                butler.put(exposure, 'calexp', dataId)
+                goodWcs = True
 
         outputRoot = dataRef.getUri(datasetType='spectractorOutputRoot', write=True)
         if not os.path.exists(outputRoot):
@@ -365,17 +434,58 @@ class ProcessStarTask(pipeBase.CmdLineTask):
             if not os.path.exists(outputRoot):
                 raise RuntimeError(f"Failed to create output dir {outputRoot}")
         expId = dataRef.dataId['expId']
-        ret = self.run(exposure, outputRoot, expId)
+
+        ret = self.run(exposure, outputRoot, expId, goodWcs)
         self.log.info("Finished processing %s" % (dataRef.dataId))
 
         return ret
+
+    def runAstrometry(self, butler, exp, icSrc):
+        refObjLoaderConfig = LoadIndexedReferenceObjectsTask.ConfigClass()
+        refObjLoaderConfig.ref_dataset_name = 'gaia_dr2_20191105'
+        refObjLoaderConfig.pixelMargin = 1000
+        refObjLoader = LoadIndexedReferenceObjectsTask(butler=butler, config=refObjLoaderConfig)
+
+        astromConfig = AstrometryTask.ConfigClass()
+        astromConfig.wcsFitter.retarget(FitAffineWcsTask)
+        astromConfig.referenceSelector.doMagLimit = True
+        magLimit = MagnitudeLimit()
+        magLimit.minimum = 1
+        magLimit.maximum = 15
+        astromConfig.referenceSelector.magLimit = magLimit
+        astromConfig.referenceSelector.magLimit.fluxField = "phot_g_mean_flux"
+        astromConfig.matcher.maxRotationDeg = 5.99
+        astromConfig.matcher.maxOffsetPix = 3000
+        astromConfig.sourceSelector['matcher'].minSnr = 10
+        solver = AstrometryTask(config=astromConfig, refObjLoader=refObjLoader)
+
+        # TODO: Change this to doing this the proper way
+        referenceFilterName = self.config.referenceFilterOverride
+        defineFilter(referenceFilterName, 656.28)
+        referenceFilter = afwImage.filter.Filter(referenceFilterName)
+        originalFilter = exp.getFilter()  # there's a better way of doing this with the task itself I think
+        exp.setFilter(referenceFilter)
+
+        try:
+            astromResult = solver.run(sourceCat=icSrc, exposure=exp)
+            exp.setFilter(originalFilter)
+        except Exception:
+            self.log.warn("Solver failed to run completely")
+            return None
+
+        scatter = astromResult.scatterOnSky.asArcseconds()
+        if scatter < 1:
+            return astromResult
+        else:
+            self.log.warn("Failed to find an acceptable match")
+        return None
 
     def pause(self):
         if self.debug.pauseOnDisplay:
             input("Press return to continue...")
         return
 
-    def run(self, exp, spectractorOutputRoot, expId):
+    def run(self, exp, spectractorOutputRoot, expId, goodWcs):
         """Calculate the wavelength calibrated 1D spectrum from a postISRCCD.
 
         An outline of the steps in the processing is as follows:
@@ -458,9 +568,27 @@ class ProcessStarTask(pipeBase.CmdLineTask):
                 self.log.info(f"Centroid of main star at: {sourceCentroid}")
                 self.pause()
 
-            spectractor.run(exp, sourceCentroid[0], sourceCentroid[1], target, spectractorOutputRoot, expId)
+            if goodWcs:
+                sourceCentroid = self.getTargetCentroidFromWcs(exp, target)
+            else:
+                raise RuntimeError("WCS was not good, and you need to implement dealing with this")
 
-            return
+            spectractor.run(exp, *sourceCentroid, target, spectractorOutputRoot, expId)
+
+        return
+
+    def getTargetCentroidFromWcs(self, exp, target):
+        obj = Simbad.query_object(target)
+        assert (len(obj) == 1), f"Found {len(obj)} simbad entries for {target}!"
+        raStr = obj[0]['RA']
+        decStr = obj[0]['DEC']
+        skyLocation = SkyCoord(raStr, decStr, unit=(u.hourangle, u.degree), frame='icrs')
+        raRad, decRad = skyLocation.ra.rad, skyLocation.dec.rad
+        ra = geom.Angle(raRad)
+        dec = geom.Angle(decRad)
+        targetLocation = geom.SpherePoint(ra, dec)
+        pixCoord = exp.getWcs().skyToPixel(targetLocation)
+        return pixCoord
 
     def flatfield(self, exp, disp):
         """Placeholder for wavelength dependent flatfielding: TODO: DM-18141
