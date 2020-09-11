@@ -28,15 +28,20 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 
+from astroquery.simbad import Simbad
+import astropy.units as u
+from astropy.coordinates import SkyCoord
+
 import lsstDebug
 import lsst.afw.image as afwImage
+from lsst.afw.image.utils import defineFilter
+import lsst.geom as geom
 from lsst.ip.isr import IsrTask
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
 from lsst.pipe.tasks.characterizeImage import CharacterizeImageTask
 from lsst.meas.algorithms import LoadIndexedReferenceObjectsTask, MagnitudeLimit
 from lsst.meas.astrom import AstrometryTask, FitAffineWcsTask
-from lsst.afw.image.utils import defineFilter
 
 import lsst.afw.detection as afwDetect
 import lsst.afw.geom as afwGeom
@@ -411,11 +416,17 @@ class ProcessStarTask(pipeBase.CmdLineTask):
             icSrc = charRes.sourceCat
             butler.put(exposure, 'icExp', dataId)
             butler.put(icSrc, 'icSrc', dataId)
-        try:
-            self.runAstrometry(butler, exposure, icSrc)
-            butler.put(exposure, 'calexp', dataId)
-        except RuntimeError:
-            pass
+
+        goodWcs = False
+        if butler.datasetExists('calexp', dataId):
+            exposure = butler.get('calexp', dataId)
+            self.log.info("Loaded calexp from disk")
+            goodWcs = True  # only saved if previous fit succeeded
+        else:
+            astromResult = self.runAstrometry(butler, exposure, icSrc)
+            if astromResult and astromResult.scatterOnSky.asArcseconds() < 1:
+                butler.put(exposure, 'calexp', dataId)
+                goodWcs = True
 
         outputRoot = dataRef.getUri(datasetType='spectractorOutputRoot', write=True)
         if not os.path.exists(outputRoot):
@@ -424,7 +435,7 @@ class ProcessStarTask(pipeBase.CmdLineTask):
                 raise RuntimeError(f"Failed to create output dir {outputRoot}")
         expId = dataRef.dataId['expId']
 
-        ret = self.run(exposure, outputRoot, expId)
+        ret = self.run(exposure, outputRoot, expId, goodWcs)
         self.log.info("Finished processing %s" % (dataRef.dataId))
 
         return ret
@@ -452,25 +463,29 @@ class ProcessStarTask(pipeBase.CmdLineTask):
         referenceFilterName = self.config.referenceFilterOverride
         defineFilter(referenceFilterName, 656.28)
         referenceFilter = afwImage.filter.Filter(referenceFilterName)
+        originalFilter = exp.getFilter()  # there's a better way of doing this with the task itself I think
         exp.setFilter(referenceFilter)
 
         try:
             astromResult = solver.run(sourceCat=icSrc, exposure=exp)
+            exp.setFilter(originalFilter)
         except Exception:
-            raise RuntimeError("Solver failed to run completely")
+            self.log.warn("Solver failed to run completely")
+            return None
 
         scatter = astromResult.scatterOnSky.asArcseconds()
         if scatter < 1:
-            return
+            return astromResult
         else:
-            raise RuntimeError("Failed to find an acceptable match")
+            self.log.warn("Failed to find an acceptable match")
+        return None
 
     def pause(self):
         if self.debug.pauseOnDisplay:
             input("Press return to continue...")
         return
 
-    def run(self, exp, spectractorOutputRoot, expId):
+    def run(self, exp, spectractorOutputRoot, expId, goodWcs):
         """Calculate the wavelength calibrated 1D spectrum from a postISRCCD.
 
         An outline of the steps in the processing is as follows:
@@ -553,9 +568,27 @@ class ProcessStarTask(pipeBase.CmdLineTask):
                 self.log.info(f"Centroid of main star at: {sourceCentroid}")
                 self.pause()
 
-            spectractor.run(exp, sourceCentroid[0], sourceCentroid[1], target, spectractorOutputRoot, expId)
+            if goodWcs:
+                sourceCentroid = self.getTargetCentroidFromWcs(exp, target)
+            else:
+                raise RuntimeError("WCS was not good, and you need to implement dealing with this")
+
+            spectractor.run(exp, *sourceCentroid, target, spectractorOutputRoot, expId)
 
         return
+
+    def getTargetCentroidFromWcs(self, exp, target):
+        obj = Simbad.query_object(target)
+        assert (len(obj) == 1), f"Found {len(obj)} simbad entries for {target}!"
+        raStr = obj[0]['RA']
+        decStr = obj[0]['DEC']
+        skyLocation = SkyCoord(raStr, decStr, unit=(u.hourangle, u.degree), frame='icrs')
+        raRad, decRad = skyLocation.ra.rad, skyLocation.dec.rad
+        ra = geom.Angle(raRad)
+        dec = geom.Angle(decRad)
+        targetLocation = geom.SpherePoint(ra, dec)
+        pixCoord = exp.getWcs().skyToPixel(targetLocation)
+        return pixCoord
 
     def flatfield(self, exp, disp):
         """Placeholder for wavelength dependent flatfielding: TODO: DM-18141
