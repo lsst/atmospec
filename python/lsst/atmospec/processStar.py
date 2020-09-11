@@ -28,15 +28,18 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 
+import astropy
 from astroquery.simbad import Simbad
+from astroquery.vizier import Vizier
 import astropy.units as u
-from astropy.coordinates import SkyCoord
+from astropy.coordinates import SkyCoord, Distance
 
 import lsstDebug
 import lsst.afw.image as afwImage
 from lsst.afw.image.utils import defineFilter
 import lsst.geom as geom
 from lsst.ip.isr import IsrTask
+import lsst.log as lsstLog
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
 from lsst.pipe.tasks.characterizeImage import CharacterizeImageTask
@@ -49,6 +52,148 @@ import lsst.afw.geom as afwGeom
 from .spectraction import SpectractorShim
 
 COMMISSIONING = False  # allows illegal things for on the mountain usage.
+
+
+def getTargetCentroidFromWcs(exp, target, doMotionCorrection=True, logger=None):
+    """Get the target's centroid, given an exposure with fitted WCS.
+
+    Parameters
+    ----------
+    exp : `lsst.afw.exposure.Exposure`
+        Exposure with fitted WCS.
+
+    target : `str`
+        The name of the target, e.g. 'HD 55852'
+
+    doMotionCorrection : `bool`, optional
+        Correct for proper motion and parallax if possible.
+        This requires the object is found in Vizier rather than Simbad.
+        If that is not possible, a warning is logged, and the uncorrected
+        centroid is returned.
+
+    Returns
+    -------
+    pixCoord : `tuple` of `float`, or `None`
+        The pixel (x, y) of the target's centroid, or None if the object
+        is not found.
+    """
+    if logger is None:
+        logger = lsstLog.Log.getDefaultLogger()
+
+    resultFrom = None
+    targetLocation = None
+    # try vizier, but it is slow, unreliable, and
+    # many objects are found but have no Hipparcos entries
+    try:
+        targetLocation = vizierLocationForTarget(exp, target, doMotionCorrection=doMotionCorrection)
+        resultFrom = 'vizier'
+        logger.info(f"Target location for {target} retrieved from Vizier")
+
+    # fail over to simbad - it has ~every target, but no proper motions
+    except ValueError:
+        try:
+            logger.warn(f"Target {target} not found in Vizier, failing over to try Simbad")
+            targetLocation = simbadLocationForTarget(target)
+            resultFrom = 'simbad'
+            logger.info(f"Target location for {target} retrieved from Simbad")
+        except ValueError as inst:  # simbad found zero or several results for target
+            msg = inst.args[0]
+            logger.warn(msg)
+            return None
+
+    if not targetLocation:
+        return None
+
+    if doMotionCorrection and resultFrom == 'simbad':
+        logger.warn(f"Failed to apply motion correction because {target} was"
+                    " only found in Simbad, not Vizier/Hipparcos")
+
+    pixCoord = exp.getWcs().skyToPixel(targetLocation)
+    return pixCoord
+
+
+def simbadLocationForTarget(target):
+    """Get the target location from Simbad.
+
+    Parameters
+    ----------
+    target : `str`
+        The name of the target, e.g. 'HD 55852'
+
+    Returns
+    -------
+    targetLocation : `lsst.geom.SpherePoint`
+        Nominal location of the target object, uncorrected for
+        proper motion and parallax.
+
+    Raises
+    ------
+    ValueError
+        If object not found, or if multiple entries for the object are found.
+    """
+    obj = Simbad.query_object(target)
+    if not obj:
+        raise ValueError(f"Found failed to find {target} in simbad!")
+    if len(obj) != 1:
+        raise ValueError(f"Found {len(obj)} simbad entries for {target}!")
+
+    raStr = obj[0]['RA']
+    decStr = obj[0]['DEC']
+    skyLocation = SkyCoord(raStr, decStr, unit=(u.hourangle, u.degree), frame='icrs')
+    raRad, decRad = skyLocation.ra.rad, skyLocation.dec.rad
+    ra = geom.Angle(raRad)
+    dec = geom.Angle(decRad)
+    targetLocation = geom.SpherePoint(ra, dec)
+    return targetLocation
+
+
+def vizierLocationForTarget(exp, target, doMotionCorrection):
+    """Get the target location from Vizier optionally correction motion.
+
+    Parameters
+    ----------
+    target : `str`
+        The name of the target, e.g. 'HD 55852'
+
+    Returns
+    -------
+    targetLocation : `lsst.geom.SpherePoint` or `None`
+        Location of the target object, optionally corrected for
+        proper motion and parallax.
+
+    Raises
+    ------
+    ValueError
+        If object not found in Hipparcos2 via Vizier.
+        This is quite common, even for bright objects.
+    """
+
+    result = Vizier.query_object(target)  # result is an empty table list for an unknown target
+    try:
+        star = result['I/311/hip2']
+    except TypeError:  # if 'I/311/hip2' not in result (result doesn't allow easy checking without a try)
+        raise ValueError
+
+    epoch = "J1991.25"
+    coord = SkyCoord(ra=star[0]['RArad']*u.Unit(star['RArad'].unit),
+                     dec=star[0]['DErad']*u.Unit(star['DErad'].unit),
+                     obstime=epoch,
+                     pm_ra_cosdec=star[0]['pmRA']*u.Unit(star['pmRA'].unit),  # NB contains cosdec already
+                     pm_dec=star[0]['pmDE']*u.Unit(star['pmDE'].unit),
+                     distance=Distance(parallax=star[0]['Plx']*u.Unit(star['Plx'].unit)))
+
+    if doMotionCorrection:
+        expDate = exp.getInfo().getVisitInfo().getDate()
+        obsTime = astropy.time.Time(expDate.get(expDate.EPOCH), format='jyear', scale='tai')
+        newCoord = coord.apply_space_motion(new_obstime=obsTime)
+    else:
+        newCoord = coord
+
+    raRad, decRad = newCoord.ra.rad, newCoord.dec.rad
+    ra = geom.Angle(raRad)
+    dec = geom.Angle(decRad)
+    targetLocation = geom.SpherePoint(ra, dec)
+    return targetLocation
 
 
 class ProcessStarTaskConfig(pexConfig.Config):
@@ -569,26 +714,13 @@ class ProcessStarTask(pipeBase.CmdLineTask):
                 self.pause()
 
             if goodWcs:
-                sourceCentroid = self.getTargetCentroidFromWcs(exp, target)
+                sourceCentroid = getTargetCentroidFromWcs(exp, target, logger=self.log)
             else:
                 raise RuntimeError("WCS was not good, and you need to implement dealing with this")
 
             spectractor.run(exp, *sourceCentroid, target, spectractorOutputRoot, expId)
 
         return
-
-    def getTargetCentroidFromWcs(self, exp, target):
-        obj = Simbad.query_object(target)
-        assert (len(obj) == 1), f"Found {len(obj)} simbad entries for {target}!"
-        raStr = obj[0]['RA']
-        decStr = obj[0]['DEC']
-        skyLocation = SkyCoord(raStr, decStr, unit=(u.hourangle, u.degree), frame='icrs')
-        raRad, decRad = skyLocation.ra.rad, skyLocation.dec.rad
-        ra = geom.Angle(raRad)
-        dec = geom.Angle(decRad)
-        targetLocation = geom.SpherePoint(ra, dec)
-        pixCoord = exp.getWcs().skyToPixel(targetLocation)
-        return pixCoord
 
     def flatfield(self, exp, disp):
         """Placeholder for wavelength dependent flatfielding: TODO: DM-18141
