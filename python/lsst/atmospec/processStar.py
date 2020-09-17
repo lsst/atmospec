@@ -27,6 +27,7 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
+from importlib import reload
 
 import astropy
 from astroquery.simbad import Simbad
@@ -669,6 +670,7 @@ class ProcessStarTask(pipeBase.CmdLineTask):
         spectrum : `lsst.atmospec.spectrum` - TODO: DM-18133
             The wavelength-calibrated 1D stellar spectrum
         """
+        reload(plt)  # reset matplotlib color cycles when multiprocessing
         pdfPath = os.path.join(spectractorOutputRoot, 'plots.pdf')
         with PdfPages(pdfPath) as pdf:
             if True:
@@ -681,7 +683,8 @@ class ProcessStarTask(pipeBase.CmdLineTask):
                                 }
                 supplementDict = {'CALLING_CODE': 'LSST_DM',
                                   'LSST_SAVEFIGPATH': spectractorOutputRoot,
-                                  'PdfPages': pdf}
+                                  }
+                resetParameters = {'PdfPages': pdf}
             else:
                 overrideDict = {}
                 supplementDict = {}
@@ -696,7 +699,8 @@ class ProcessStarTask(pipeBase.CmdLineTask):
             configFilename = '/home/mfl/lsst/Spectractor/config/auxtel.ini'
             spectractor = SpectractorShim(configFile=configFilename,
                                           paramOverrides=overrideDict,
-                                          supplementaryParameters=supplementDict)
+                                          supplementaryParameters=supplementDict,
+                                          resetParameters=resetParameters)
 
             target = exp.getMetadata()['OBJECT']
             if self.config.forceObjectName:
