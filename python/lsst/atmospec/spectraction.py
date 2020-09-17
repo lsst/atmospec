@@ -42,7 +42,8 @@ class SpectractorShim():
     TRANSPOSE = True
 
     # leading * for kwargs only in constructor
-    def __init__(self, *, configFile=None, paramOverrides=None, supplementaryParameters=None):
+    def __init__(self, *, configFile=None, paramOverrides=None, supplementaryParameters=None,
+                 resetParameters=None):
         if configFile:
             print(f"Loading config from {configFile}")
             load_config(configFile)
@@ -51,6 +52,8 @@ class SpectractorShim():
             self.overrideParameters(paramOverrides)
         if supplementaryParameters is not None:
             self.supplementParameters(supplementaryParameters)
+        if resetParameters is not None:
+            self.resetParameters(resetParameters)
         return
 
     def overrideParameters(self, overrides):
@@ -97,6 +100,24 @@ class SpectractorShim():
                 self.log.warn(msg, k)
             else:
                 setattr(parameters, k, v)
+
+    def resetParameters(self, resetParameters):
+        """Dict of Spectractor parameters reset in the namespace.
+
+        Use this method assign parameters to the namespace whether they exist
+        or not.
+
+        Parameters
+        ----------
+        resetParameters : `dict`
+            Dict of parameters to add.
+        """
+        # NB avoid using the variable name `parameters` in this method
+        # due to scope collision
+        for k, v in resetParameters.items():
+            # NB do not use hasattr(parameters, k) here, as this is broken by
+            # the overloading of __getattr__ in parameters
+            setattr(parameters, k, v)
 
     @staticmethod
     def dumpParameters():
