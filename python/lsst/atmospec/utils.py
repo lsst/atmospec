@@ -26,8 +26,14 @@ import lsst.afw.math as afwMath
 import lsst.afw.image as afwImage
 import lsst.log as lsstLog
 import lsst.afw.geom as afwGeom
-import lsst.afw.cameraGeom as camGeom
 from lsst.afw.cameraGeom import PIXELS, FOCAL_PLANE
+
+import astropy.units as u
+from astropy.time import Time
+from astropy.coordinates import SkyCoord, EarthLocation, AltAz
+
+
+AUXTEL_LOCATION = EarthLocation(lat=-30.244639*u.deg, lon=-70.749417*u.deg, height=2663*u.m)
 
 
 def makeGainFlat(exposure, gainDict, invertGains=False):
@@ -276,3 +282,22 @@ def rotateExposure(exp, nDegrees, kernelName='lanczos4', logger=None):
     rotatedExp = warper.warpExposure(rotatedWcs, exp)
     rotatedExp.setXY0(afwGeom.Point2I(0, 0))
     return rotatedExp
+
+
+def airMassFromRawMetadata(md):
+    """Calculate the visit's airmass from the raw header information.
+
+    Returns the airmass, or 0 if the calculation fails.
+    Zero was chosen as it is an obviously unphysical value, but means
+    that calling code doesn't have to test if None, as numeric values can
+    be used more easily in place."""
+    time = Time(md['DATE-OBS'])
+    if md['RASTART'] is not None and md['DECSTART'] is not None:
+        skyLocation = SkyCoord(md['RASTART'], md['DECSTART'], unit=u.deg)
+    elif md['RA'] is not None and md['DEC'] is not None:
+        skyLocation = SkyCoord(md['RA'], md['DEC'], unit=u.deg)
+    else:
+        return 0
+    altAz = AltAz(obstime=time, location=AUXTEL_LOCATION)
+    observationAltAz = skyLocation.transform_to(altAz)
+    return observationAltAz.secz.value
