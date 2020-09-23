@@ -23,5 +23,6 @@ import pkgutil
 import lsstimport
 from .processStar import *
 from .dispersion import *
+from .utils import *
 from .version import *
 __path__ = pkgutil.extend_path(__path__, __name__)
