@@ -691,9 +691,6 @@ class ProcessStarTask(pipeBase.CmdLineTask):
 
             overrideDict['DISTANCE2CCD'] = 175  # TODO: change to a calculation based on LINPOS
 
-            sourceCentroid = self.findMainSource(exp)
-            self.log.info(f"Centroid of main star at: {sourceCentroid!r}")
-
             # Note - flow is that the config file is loaded, then overrides are
             # applied, then supplements are set.
             configFilename = '/home/mfl/lsst/Spectractor/config/auxtel.ini'
@@ -710,17 +707,19 @@ class ProcessStarTask(pipeBase.CmdLineTask):
             if target in ['FlatField position', 'Park position', 'Test', 'NOTSET']:
                 raise ValueError(f"OBJECT set to {target} - this is not a celestial object!")
 
+            if goodWcs:
+                sourceCentroid = getTargetCentroidFromWcs(exp, target, logger=self.log)
+            else:
+                sourceCentroid = self.findMainSource(exp)
+                self.log.warn(f"Astrometric fit failed, failing over to source-finding centroid")
+                self.log.info(f"Centroid of main star at: {sourceCentroid!r}")
+
             if self.debug.display and 'raw' in self.debug.displayItems:
                 self.disp1.mtv(exp)
                 self.disp1.dot('x', sourceCentroid[0], sourceCentroid[1], size=100)
                 self.log.info("Showing full postISR image")
                 self.log.info(f"Centroid of main star at: {sourceCentroid}")
                 self.pause()
-
-            if goodWcs:
-                sourceCentroid = getTargetCentroidFromWcs(exp, target, logger=self.log)
-            else:
-                raise RuntimeError("WCS was not good, and you need to implement dealing with this")
 
             spectractor.run(exp, *sourceCentroid, target, spectractorOutputRoot, expId)
 
