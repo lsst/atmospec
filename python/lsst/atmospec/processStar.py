@@ -43,6 +43,7 @@ from lsst.ip.isr import IsrTask
 import lsst.log as lsstLog
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
+from lsst.utils import getPackageDir
 from lsst.pipe.tasks.characterizeImage import CharacterizeImageTask
 from lsst.meas.algorithms import LoadIndexedReferenceObjectsTask, MagnitudeLimit
 from lsst.meas.astrom import AstrometryTask, FitAffineWcsTask
@@ -631,6 +632,12 @@ class ProcessStarTask(pipeBase.CmdLineTask):
             input("Press return to continue...")
         return
 
+    def loadStarNames(self):
+        starNameFile = os.path.join(getPackageDir('atmospec'), 'data', 'starNames.txt')
+        with open(starNameFile, 'r') as f:
+            lines = f.readlines()
+        return [line.strip() for line in lines]
+
     def run(self, exp, spectractorOutputRoot, expId, goodWcs):
         """Calculate the wavelength calibrated 1D spectrum from a postISRCCD.
 
@@ -672,6 +679,7 @@ class ProcessStarTask(pipeBase.CmdLineTask):
         """
         reload(plt)  # reset matplotlib color cycles when multiprocessing
         pdfPath = os.path.join(spectractorOutputRoot, 'plots.pdf')
+        starNames = self.loadStarNames()
         with PdfPages(pdfPath) as pdf:
             if True:
                 overrideDict = {'SAVE': True,
@@ -682,9 +690,9 @@ class ProcessStarTask(pipeBase.CmdLineTask):
                                 # 'CCD_IMSIZE': 4000}
                                 }
                 supplementDict = {'CALLING_CODE': 'LSST_DM',
-                                  'LSST_SAVEFIGPATH': spectractorOutputRoot,
-                                  }
-                resetParameters = {'PdfPages': pdf}
+                                  'STAR_NAMES': starNames}
+                resetParameters = {'PdfPages': pdf,  # anything that changes between dataRefs!
+                                   'LSST_SAVEFIGPATH': spectractorOutputRoot}
             else:
                 overrideDict = {}
                 supplementDict = {}
