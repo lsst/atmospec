@@ -32,7 +32,7 @@ from lsst.obs.lsst.translators.lsst import FILTER_DELIMITER
 
 from .utils import airMassFromRawMetadata
 
-__all__ = ["NightStellarSpectra", "getLineValue"]
+__all__ = ["NightStellarSpectra", "getLineValue", "LINE_NAMES"]
 
 LINE_NAME_COLUMN = 0
 
@@ -47,7 +47,7 @@ LINE_NAMES = {'H_alpha': '$H\\alpha$',
               'O2_y': '$O_2(Y)$',
               'O2': '$O_2$',
               'water': '$H_2 O$',  # this actually maps to more than one line! Needs fixing upstream
-              'fakeLine': 'does_not_exist'}
+              }
 
 LINE_NAMES_REVERSED = {v: k for k, v in LINE_NAMES.items()}
 
@@ -57,7 +57,7 @@ def _getRowNum(table, lineName):
     try:
         actualName = LINE_NAMES[lineName]
     except KeyError:
-        raise RuntimeError(f"Unknown line name {lineName}") from None  # chaining unhelpful here
+        raise RuntimeError(f"Unknown line name {lineName}") from None  # error chaining unhelpful here
 
     for rowNum, row in enumerate(table.iterrows()):
         if row[LINE_NAME_COLUMN] == actualName:
@@ -84,7 +84,7 @@ class NightStellarSpectra():
     """Class for holding the results for a night's observations of a given star
     """
 
-    def __init__(self, rerunDir, dayObs, targetName, *, butler=None):
+    def __init__(self, rerunDir, dayObs, targetName, *, butler=None, ignoreSeqNums=[]):
         self.rerunDir = rerunDir
         self.dayObs = dayObs
         self.targetName = targetName
@@ -92,7 +92,8 @@ class NightStellarSpectra():
             self.butler = butler
         else:
             self.butler = dafPersist.Butler(rerunDir)
-        self._loadExtractions()
+        self._loadExtractions(ignoreSeqNums)
+        # xxx maybe just load everything and then call removeSeqNums()?
 
     def isDispersed(self, seqNum):
         """Match object and check is dispersed"""
@@ -126,24 +127,45 @@ class NightStellarSpectra():
             return table
         return None
 
-    def _loadExtractions(self):
+    def _loadExtractions(self, ignoreSeqNums):
         allSeqNums = self.butler.queryMetadata('raw', 'seqNum', dayObs=self.dayObs, object=self.targetName)
 
         self.seqNums = []
+        nIgnored = 0
+
         for seqNum in allSeqNums:
             if self.isDispersed(seqNum):
-                self.seqNums.append(seqNum)
-        print(f"Found {len(self.seqNums)} dispersed observations of "
-              f"{self.targetName} on {self.dayObs} in registry")
+                if seqNum not in ignoreSeqNums:
+                    self.seqNums.append(seqNum)
+                else:
+                    nIgnored += 1
+
+        msg = (f"Found {len(self.seqNums)+nIgnored} dispersed observations of " +
+               f"{self.targetName} on {self.dayObs} in registry")
+        if nIgnored:
+            msg += f" of which {nIgnored} were skipped."
+        print(msg)
+
         self.seqNums = sorted(self.seqNums)  # not guaranteed to be in order, I don't think
 
         self.data = {}
+        fails = []
         for seqNum in self.seqNums:
             linesTable = self._readOneExtractionFile(seqNum)
             if linesTable:
                 self.data[seqNum] = linesTable
+            else:
+                fails.append(seqNum)  # can't remove while looping
+        self.seqNums = [s for s in self.seqNums if s not in fails]
         print(f"Loaded extractions for {len(self.data.keys())} of the above")
         return
+
+    def removeSeqNums(self, seqNums):
+        for seqNum in seqNums:
+            if seqNum in self.seqNums:
+                assert seqNum in self.data.keys()
+                self.seqNums.remove(seqNum)
+                self.data.pop(seqNum)
 
     def getFilterDisperserSet(self):
         fullFilters = set()
@@ -171,6 +193,10 @@ class NightStellarSpectra():
         # just convenient to be able to call this on a class instance as well
         # as the free floating function - nothing deep happening here
         return getLineValue(self.data[seqNum], lineName, columnName)
+
+    def getLineValues(self, lineName, columnName):
+        return [getLineValue(self.data[seqNum], lineName, columnName) if seqNum in self.data else np.nan
+                for seqNum in self.seqNums]
 
     def getAllTableLines(self, includeIntermittentLines=True):
         lineSets = []
