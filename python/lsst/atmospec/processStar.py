@@ -43,6 +43,7 @@ from lsst.ip.isr import IsrTask
 import lsst.log as lsstLog
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
+from lsst.utils import getPackageDir
 from lsst.pipe.tasks.characterizeImage import CharacterizeImageTask
 from lsst.meas.algorithms import LoadIndexedReferenceObjectsTask, MagnitudeLimit
 from lsst.meas.astrom import AstrometryTask, FitAffineWcsTask
@@ -521,6 +522,32 @@ class ProcessStarTask(pipeBase.CmdLineTask):
                                "selected: {self.config.mainSourceFindingMethod}")
         return source.getCentroid()
 
+    def updateMetadata(self, exp, **kwargs):
+        md = exp.getMetadata()
+        vi = exp.getInfo().getVisitInfo()
+
+        ha = vi.getBoresightHourAngle().asDegrees()
+        airmass = vi.getBoresightAirmass()
+
+        md['HA'] = ha
+        md.setComment('HA', 'Hour angle of observation start')
+
+        md['AIRMASS'] = airmass
+        md.setComment('AIRMASS', 'Airmass at observation start')
+
+        if 'centroid' in kwargs:
+            centroid = kwargs['centroid']
+        else:
+            centroid = (None, None)
+
+        md['OBJECTX'] = centroid[0]
+        md.setComment('OBJECTX', 'x pixel coordinate of object centroid')
+
+        md['OBJECTY'] = centroid[1]
+        md.setComment('OBJECTY', 'y pixel coordinate of object centroid')
+
+        exp.setMetadata(md)
+
     def runDataRef(self, dataRef):
         """Run the ProcessStarTask on a ButlerDataRef for a single exposure.
 
@@ -550,6 +577,7 @@ class ProcessStarTask(pipeBase.CmdLineTask):
                 self.log.info("Loaded postISRCCD from disk")
             else:
                 exposure = self.isr.runDataRef(dataRef).exposure
+                self.updateMetadata(exposure)
                 butler.put(exposure, 'postISRCCD', dataId)
 
         if butler.datasetExists('icExp', dataId) and butler.datasetExists('icSrc', dataId):
@@ -563,16 +591,30 @@ class ProcessStarTask(pipeBase.CmdLineTask):
             butler.put(exposure, 'icExp', dataId)
             butler.put(icSrc, 'icSrc', dataId)
 
-        goodWcs = False
         if butler.datasetExists('calexp', dataId):
             exposure = butler.get('calexp', dataId)
             self.log.info("Loaded calexp from disk")
-            goodWcs = True  # only saved if previous fit succeeded
+            md = exposure.getMetadata()
+            sourceCentroid = (md['OBJECTX'], md['OBJECTY'])  # set in saved md if previous fit succeeded
         else:
             astromResult = self.runAstrometry(butler, exposure, icSrc)
             if astromResult and astromResult.scatterOnSky.asArcseconds() < 1:
-                butler.put(exposure, 'calexp', dataId)
-                goodWcs = True
+                target = exposure.getMetadata()['OBJECT']
+                sourceCentroid = getTargetCentroidFromWcs(exposure, target, logger=self.log)
+            else:
+                sourceCentroid = self.findMainSource(exposure)
+                self.log.warn(f"Astrometric fit failed, failing over to source-finding centroid")
+                self.log.info(f"Centroid of main star at: {sourceCentroid!r}")
+
+            self.updateMetadata(exposure, centroid=sourceCentroid)
+            butler.put(exposure, 'calexp', dataId)
+
+            if self.debug.display and 'raw' in self.debug.displayItems:
+                self.disp1.mtv(exposure)
+                self.disp1.dot('x', sourceCentroid[0], sourceCentroid[1], size=100)
+                self.log.info("Showing full postISR image")
+                self.log.info(f"Centroid of main star at: {sourceCentroid}")
+                self.pause()
 
         outputRoot = dataRef.getUri(datasetType='spectractorOutputRoot', write=True)
         if not os.path.exists(outputRoot):
@@ -581,7 +623,7 @@ class ProcessStarTask(pipeBase.CmdLineTask):
                 raise RuntimeError(f"Failed to create output dir {outputRoot}")
         expId = dataRef.dataId['expId']
 
-        ret = self.run(exposure, outputRoot, expId, goodWcs)
+        ret = self.run(exposure, outputRoot, expId, sourceCentroid)
         self.log.info("Finished processing %s" % (dataRef.dataId))
 
         return ret
@@ -631,7 +673,13 @@ class ProcessStarTask(pipeBase.CmdLineTask):
             input("Press return to continue...")
         return
 
-    def run(self, exp, spectractorOutputRoot, expId, goodWcs):
+    def loadStarNames(self):
+        starNameFile = os.path.join(getPackageDir('atmospec'), 'data', 'starNames.txt')
+        with open(starNameFile, 'r') as f:
+            lines = f.readlines()
+        return [line.strip() for line in lines]
+
+    def run(self, exp, spectractorOutputRoot, expId, sourceCentroid):
         """Calculate the wavelength calibrated 1D spectrum from a postISRCCD.
 
         An outline of the steps in the processing is as follows:
@@ -672,6 +720,7 @@ class ProcessStarTask(pipeBase.CmdLineTask):
         """
         reload(plt)  # reset matplotlib color cycles when multiprocessing
         pdfPath = os.path.join(spectractorOutputRoot, 'plots.pdf')
+        starNames = self.loadStarNames()
         with PdfPages(pdfPath) as pdf:
             if True:
                 overrideDict = {'SAVE': True,
@@ -682,17 +731,14 @@ class ProcessStarTask(pipeBase.CmdLineTask):
                                 # 'CCD_IMSIZE': 4000}
                                 }
                 supplementDict = {'CALLING_CODE': 'LSST_DM',
-                                  'LSST_SAVEFIGPATH': spectractorOutputRoot,
-                                  }
-                resetParameters = {'PdfPages': pdf}
+                                  'STAR_NAMES': starNames}
+                resetParameters = {'PdfPages': pdf,  # anything that changes between dataRefs!
+                                   'LSST_SAVEFIGPATH': spectractorOutputRoot}
             else:
                 overrideDict = {}
                 supplementDict = {}
 
             overrideDict['DISTANCE2CCD'] = 175  # TODO: change to a calculation based on LINPOS
-
-            sourceCentroid = self.findMainSource(exp)
-            self.log.info(f"Centroid of main star at: {sourceCentroid!r}")
 
             # Note - flow is that the config file is loaded, then overrides are
             # applied, then supplements are set.
@@ -709,18 +755,6 @@ class ProcessStarTask(pipeBase.CmdLineTask):
 
             if target in ['FlatField position', 'Park position', 'Test', 'NOTSET']:
                 raise ValueError(f"OBJECT set to {target} - this is not a celestial object!")
-
-            if self.debug.display and 'raw' in self.debug.displayItems:
-                self.disp1.mtv(exp)
-                self.disp1.dot('x', sourceCentroid[0], sourceCentroid[1], size=100)
-                self.log.info("Showing full postISR image")
-                self.log.info(f"Centroid of main star at: {sourceCentroid}")
-                self.pause()
-
-            if goodWcs:
-                sourceCentroid = getTargetCentroidFromWcs(exp, target, logger=self.log)
-            else:
-                raise RuntimeError("WCS was not good, and you need to implement dealing with this")
 
             spectractor.run(exp, *sourceCentroid, target, spectractorOutputRoot, expId)
 
