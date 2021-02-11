@@ -27,9 +27,12 @@ import numpy as np
 from spectractor import parameters
 from spectractor.config import load_config
 from spectractor.extractor.images import Image, find_target, turn_image
-from spectractor.extractor.spectrum import (Spectrum, extract_spectrum_from_image, calibrate_spectrum,
-                                            calibrate_spectrum_with_lines)
+
 from spectractor.extractor.dispersers import Hologram
+from spectractor.extractor.extractor import (set_fast_mode, FullForwardModelFitWorkspace,
+                                             plot_comparison_truth, run_ffm_minimisation,
+                                             extract_spectrum_from_image)
+from spectractor.extractor.spectrum import Spectrum, calibrate_spectrum
 
 import lsst.log as lsstLog
 
@@ -158,12 +161,13 @@ class SpectractorShim():
 
     @staticmethod
     def _getFilterAndDisperserFromExp(exp):
+        # TODO: import the delimiter from obs_package
         filterName = exp.getFilter().getName()
         if len(filterName.split('~')) == 1:
             filt1 = filterName
             filt2 = exp.getInfo().getMetadata()['GRATING']
         else:
-            filt1, filt2 = filterName.split('~')  # TODO: import the delimiter from obs_package
+            filt1, filt2 = filterName.split('~')
 
         return filt1, filt2
 
@@ -267,22 +271,22 @@ class SpectractorShim():
         if centroid:
             disp1.dot('x', centroid[0], centroid[1], size=100)
 
-    def run(self, exp, xpos, ypos, target, outputRoot, expId):
-
-        # run option kwargs in the original code - do something with these
+    def run(self, exp, xpos, ypos, target, outputRoot, expId, binning=1, plotting=True):
+        # run option kwargs in the original code, seems to ~always be True
         atmospheric_lines = True
-        line_detection = True
 
         self.log.info('Starting SPECTRACTOR')
-        # xxx change plotting to an option?
-        self._makePath(outputRoot, plotting=True)  # early in case this fails, as processing is slow
+        # TODO: rename _makePath _makeOutputPath
+        self._makePath(outputRoot, plotting=plotting)  # early in case this fails, as processing is slow
 
-        # xxx if/when objects are returned, change these to butler.put()
+        # TODO: once objects are returned, change these to be a butler.put() or other persistence
+        # TODO: change to f-strings
         outputFilenameSpectrum = os.path.join(outputRoot, 'v'+str(expId)+'_spectrum.fits')
         outputFilenameSpectrogram = os.path.join(outputRoot, 'v'+str(expId)+'_spectrogram.fits')
         outputFilenamePsf = os.path.join(outputRoot, 'v'+str(expId)+'_table.csv')
+        outputFilenameLines = os.path.join(outputRoot, 'v'+str(expId)+'_lines.csv')
 
-        # Load config file
+        # Upstream loads config file here
 
         filt, disperser = self._getFilterAndDisperserFromExp(exp)
         image = self.spectractorImageFromLsstExposure(exp, target_label=target, disperser_label=disperser)
@@ -297,12 +301,19 @@ class SpectractorShim():
             image, xpos, ypos = self.flipImageLeftRight(image, xpos, ypos)
             self.displayImage(image, centroid=(xpos, ypos))
 
-        # Find the exact target position in the raw cut image: several methods
+        # TODO: set image.target_guess = np.asarray((xpos, ypos)) I think - might be unnecessary
+
+        # TODO: this needs to move up a level to processStar.py, and run as a new process
+        # Use fast mode
+        if binning > 1:
+            image = set_fast_mode(image)
+            if parameters.DEBUG:
+                image.plot_image(scale='symlog', target_pixcoords=image.target_guess)
 
         # image turning and target finding - use LSST code instead?
         # and if not, at least test how the rotation code compares
         # this part of Spectractor is certainly slow at the very least
-        if True:  # change this to be an option, at least for testing vs LSST
+        if True:  # TODO: change this to be an option, at least for testing vs LSST
             self.log.info('Search for the target in the image...')
             _ = find_target(image, (xpos, ypos))  # sets the image.target_pixcoords
             turn_image(image)  # creates the rotated data, and sets the image.target_pixcoords_rotated
@@ -311,7 +322,7 @@ class SpectractorShim():
             # Find the exact target position in the rotated image:
             # several methods - but how are these controlled? MFL
             self.log.info('Search for the target in the rotated image...')
-            _ = find_target(image, (xpos, ypos), rotated=True)
+            _ = find_target(image, (xpos, ypos), rotated=True, use_wcs=False)
         else:
             # code path for if the image is pre-rotated by LSST code
             raise NotImplementedError
@@ -319,31 +330,46 @@ class SpectractorShim():
         # Create Spectrum object
         spectrum = Spectrum(image=image)
         # Subtract background and bad pixels
-        extract_spectrum_from_image(image, spectrum, w=parameters.PIXWIDTH_SIGNAL,
+        extract_spectrum_from_image(image, spectrum, signal_width=parameters.PIXWIDTH_SIGNAL,
                                     ws=(parameters.PIXDIST_BACKGROUND,
-                                        parameters.PIXDIST_BACKGROUND+parameters.PIXWIDTH_BACKGROUND),
-                                    right_edge=parameters.CCD_IMSIZE-200)
+                                        parameters.PIXDIST_BACKGROUND + parameters.PIXWIDTH_BACKGROUND),
+                                    right_edge=parameters.CCD_IMSIZE)  # MFL: this used to be CCD_IMSIZE-200
         spectrum.atmospheric_lines = atmospheric_lines
         # Calibrate the spectrum
         calibrate_spectrum(spectrum)
-        if line_detection:
-            self.log.info('Calibrating order %d spectrum...' % spectrum.order)
-            calibrate_spectrum_with_lines(spectrum)
-        else:
-            spectrum.header['WARNINGS'] = 'No calibration procedure with spectral features.'
+
+        # Full forward model extraction: add transverse ADR and order 2 subtraction
+        workspace = None
+        if parameters.PSF_EXTRACTION_MODE == "PSF_2D":
+            workspace = FullForwardModelFitWorkspace(spectrum, verbose=1, plot=True, live_fit=False,
+                                                     amplitude_priors_method="spectrum")
+            for i in range(2):
+                spectrum.convert_from_flam_to_ADUrate()
+                spectrum = run_ffm_minimisation(workspace, method="newton")
+
+                # Calibrate the spectrum
+                calibrate_spectrum(spectrum)
+                workspace.p[1] = spectrum.disperser.D
+                workspace.p[2] = spectrum.header['PIXSHIFT']
+                # Compare with truth if available
+                if parameters.PSF_EXTRACTION_MODE == "PSF_2D" and 'LBDAS_T' in spectrum.header and parameters.DEBUG:
+                    plot_comparison_truth(spectrum, workspace)
 
         # Save the spectrum
         self._ensureFitsHeader(spectrum)  # SIMPLE is missing by default
 
         spectrum.save_spectrum(outputFilenameSpectrum, overwrite=True)
         spectrum.save_spectrogram(outputFilenameSpectrogram, overwrite=True)
+        spectrum.lines.print_detected_lines(output_file_name=outputFilenameLines,
+                                            overwrite=True, amplitude_units=spectrum.units)
         # Plot the spectrum
 
         parameters.DISPLAY = True
         if parameters.VERBOSE and parameters.DISPLAY:
             spectrum.plot_spectrum(xlim=None)
-        distance = spectrum.chromatic_psf.get_distance_along_dispersion_axis()
-        spectrum.lambdas = np.interp(distance, spectrum.pixels, spectrum.lambdas)
+
+        # distance = spectrum.chromatic_psf.get_distance_along_dispersion_axis()
+        # spectrum.lambdas = np.interp(distance, spectrum.pixels, spectrum.lambdas)
         spectrum.chromatic_psf.table['lambdas'] = spectrum.lambdas
         spectrum.chromatic_psf.table.write(outputFilenamePsf, overwrite=True)
         return spectrum
