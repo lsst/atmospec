@@ -49,7 +49,6 @@ from lsst.meas.algorithms import LoadIndexedReferenceObjectsTask, MagnitudeLimit
 from lsst.meas.astrom import AstrometryTask, FitAffineWcsTask
 
 import lsst.afw.detection as afwDetect
-import lsst.afw.geom as afwGeom
 
 from .spectraction import SpectractorShim
 
@@ -812,7 +811,7 @@ class ProcessStarTask(pipeBase.CmdLineTask):
         self.log.debug('(xStart, xEnd) = (%s, %s)'%(xStart, xEnd))
         self.log.debug('(yStart, yEnd) = (%s, %s)'%(yStart, yEnd))
 
-        bbox = afwGeom.Box2I(afwGeom.Point2I(xStart, yStart), afwGeom.Point2I(xEnd, yEnd))
+        bbox = geom.Box2I(geom.Point2I(xStart, yStart), geom.Point2I(xEnd, yEnd))
         return bbox
 
         # def calcRidgeLine(self, footprint):
