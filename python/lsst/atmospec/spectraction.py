@@ -25,16 +25,18 @@ import os
 import numpy as np
 
 from spectractor import parameters
-from spectractor.config import load_config
-from spectractor.extractor.images import Image, find_target, turn_image
+parameters.CALLING_CODE = "LSST_DM"  # this must be set IMMEDIATELY to supress colored logs
 
-from spectractor.extractor.dispersers import Hologram
+from spectractor.config import load_config  # noqa: E402
+from spectractor.extractor.images import Image, find_target, turn_image  # noqa: E402
+
+from spectractor.extractor.dispersers import Hologram  # noqa: E402
 from spectractor.extractor.extractor import (set_fast_mode, FullForwardModelFitWorkspace,
                                              plot_comparison_truth, run_ffm_minimisation,
-                                             extract_spectrum_from_image)
-from spectractor.extractor.spectrum import Spectrum, calibrate_spectrum
+                                             extract_spectrum_from_image)  # noqa: E402
+from spectractor.extractor.spectrum import Spectrum, calibrate_spectrum  # noqa: E402
 
-import lsst.log as lsstLog
+import lsst.log as lsstLog  # noqa: E402
 
 
 class SpectractorShim():
@@ -136,7 +138,7 @@ class SpectractorShim():
         object in place where possible. Where this is not possible the methods
         are labeled _setSomething().
         """
-        file_name = '/home/mfl/lsst/Spectractor/tests/data/asdasauxtel_first_light-1.fits'  # xxx REALLY needs removing
+        file_name = '/home/mfl/lsst/Spectractor/tests/data/auxtel_first_light-1.fits'  # xxx REALLY needs removing
         image = Image(file_name=file_name, target_label=target_label, disperser_label=disperser_label)
 
         image.data = self._getImageData(exp)
@@ -271,6 +273,27 @@ class SpectractorShim():
         if centroid:
             disp1.dot('x', centroid[0], centroid[1], size=100)
 
+    def setAdrParameters(self, spectrum, exp):
+        # adr_params = [dec, hour_angle, temperature, pressure, humidity, airmass]
+        vi = exp.getInfo().getVisitInfo()
+
+        raDec = vi.getBoresightRaDec()
+        decLsst = raDec.getDec()
+
+        dec = raDec.getDec()
+        hourAngle = vi.getBoresightHourAngle()
+        
+        weather = vi.getWeather()
+        _temperature = weather.getAirTemperature()
+        temperature = _temperature if not np.isnan(_temperature) else None
+        _pressure = weather.getAirPressure()
+        pressure = _pressure if not np.isnan(_pressure) else None
+        _humidity = weather.getHumidity()
+        humidity = _humidity if not np.isnan(_humidity) else None
+
+        airmass = vi.getBoresightAirmass()
+        spectrum.adr_params = [dec, hour_angle, temperature, pressure, humidity, airmass]
+
     def run(self, exp, xpos, ypos, target, outputRoot, expId, binning=1, plotting=True):
         # run option kwargs in the original code, seems to ~always be True
         atmospheric_lines = True
@@ -287,6 +310,12 @@ class SpectractorShim():
         outputFilenameLines = os.path.join(outputRoot, 'v'+str(expId)+'_lines.csv')
 
         # Upstream loads config file here
+
+        # TODO: passing exact centroids seems to be causing a serious and non-obvious problem
+        # this needs fixing for several reasons, mostly because if we have a
+        # known good centroid then we want to skip the refitting entirely
+        xpos = int(np.round(xpos))
+        ypos = int(np.round(ypos))
 
         filt, disperser = self._getFilterAndDisperserFromExp(exp)
         image = self.spectractorImageFromLsstExposure(exp, target_label=target, disperser_label=disperser)
@@ -329,6 +358,8 @@ class SpectractorShim():
 
         # Create Spectrum object
         spectrum = Spectrum(image=image)
+        # self.setAdrParameters(spectrum, exp)
+
         # Subtract background and bad pixels
         extract_spectrum_from_image(image, spectrum, signal_width=parameters.PIXWIDTH_SIGNAL,
                                     ws=(parameters.PIXDIST_BACKGROUND,
@@ -337,6 +368,7 @@ class SpectractorShim():
         spectrum.atmospheric_lines = atmospheric_lines
         # Calibrate the spectrum
         calibrate_spectrum(spectrum)
+        return
 
         # Full forward model extraction: add transverse ADR and order 2 subtraction
         workspace = None

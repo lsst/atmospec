@@ -721,42 +721,48 @@ class ProcessStarTask(pipeBase.CmdLineTask):
         pdfPath = os.path.join(spectractorOutputRoot, 'plots.pdf')
         starNames = self.loadStarNames()
         with PdfPages(pdfPath) as pdf:
-            if True:
-                overrideDict = {'SAVE': True,
-                                'OBS_NAME': 'AUXTEL',
-                                'DEBUG': True,
-                                'DISPLAY': False,
-                                'VERBOSE': True,
-                                # 'CCD_IMSIZE': 4000}
-                                }
-                supplementDict = {'CALLING_CODE': 'LSST_DM',
-                                  'STAR_NAMES': starNames}
-                resetParameters = {'PdfPages': pdf,  # anything that changes between dataRefs!
-                                   'LSST_SAVEFIGPATH': spectractorOutputRoot}
-            else:
-                overrideDict = {}
-                supplementDict = {}
+            try:  # need a try here so that the context manager always exits cleanly so plots always written
+                if True:
+                    overrideDict = {'SAVE': True,
+                                    'OBS_NAME': 'AUXTEL',
+                                    'DEBUG': False,
+                                    'DISPLAY': False,
+                                    'VERBOSE': 0,
+                                    # 'CCD_IMSIZE': 4000}
+                                    }
+                    supplementDict = {'CALLING_CODE': 'LSST_DM',
+                                      'STAR_NAMES': starNames}
+                    resetParameters = {'PdfPages': pdf,  # anything that changes between dataRefs!
+                                       'LSST_SAVEFIGPATH': spectractorOutputRoot}
+                else:
+                    overrideDict = {}
+                    supplementDict = {}
 
-            overrideDict['DISTANCE2CCD'] = 175  # TODO: change to a calculation based on LINPOS
+                overrideDict['DISTANCE2CCD'] = 175  # TODO: change to a calculation based on LINPOS
 
-            # Note - flow is that the config file is loaded, then overrides are
-            # applied, then supplements are set.
-            configFilename = '/home/mfl/lsst/Spectractor/config/auxtel.ini'
-            spectractor = SpectractorShim(configFile=configFilename,
-                                          paramOverrides=overrideDict,
-                                          supplementaryParameters=supplementDict,
-                                          resetParameters=resetParameters)
+                # Note - flow is that the config file is loaded, then overrides are
+                # applied, then supplements are set.
+                configFilename = '/home/mfl/lsst/Spectractor/config/auxtel.ini'
+                spectractor = SpectractorShim(configFile=configFilename,
+                                              paramOverrides=overrideDict,
+                                              supplementaryParameters=supplementDict,
+                                              resetParameters=resetParameters)
 
-            target = exp.getMetadata()['OBJECT']
-            if self.config.forceObjectName:
-                self.log.warn(f"Forcing target name from {target} to {self.config.forceObjectName}")
-                target = self.config.forceObjectName
+                target = exp.getMetadata()['OBJECT']
+                if self.config.forceObjectName:
+                    self.log.warn(f"Forcing target name from {target} to {self.config.forceObjectName}")
+                    target = self.config.forceObjectName
 
-            if target in ['FlatField position', 'Park position', 'Test', 'NOTSET']:
-                raise ValueError(f"OBJECT set to {target} - this is not a celestial object!")
+                if target in ['FlatField position', 'Park position', 'Test', 'NOTSET']:
+                    raise ValueError(f"OBJECT set to {target} - this is not a celestial object!")
 
-            spectractor.run(exp, *sourceCentroid, target, spectractorOutputRoot, expId)
-
+                spectractor.run(exp, *sourceCentroid, target, spectractorOutputRoot, expId)
+            except Exception as e:
+                msg = f"Caught exception {e}, failing here so pdf can be written to {pdfPath}"
+                print(msg)
+                # if True:
+                #     raise RuntimeError from e
+                # import ipdb as pdb; pdb.set_trace()
         return
 
     def flatfield(self, exp, disp):
