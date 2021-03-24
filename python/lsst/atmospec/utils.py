@@ -26,6 +26,7 @@ import lsst.afw.math as afwMath
 import lsst.afw.image as afwImage
 import lsst.log as lsstLog
 import lsst.afw.geom as afwGeom
+import lsst.geom as geom
 from lsst.afw.cameraGeom import PIXELS, FOCAL_PLANE
 
 import astropy.units as u
@@ -273,14 +274,14 @@ def rotateExposure(exp, nDegrees, kernelName='lanczos4', logger=None):
     detector = exp.getDetector()
     pixelScale = wcs.getPixelScale().asDegrees()
     crval = wcs.getSkyOrigin()
-    rotAngle = afwGeom.Angle(nDegrees, afwGeom.degrees)
-    cd = (afwGeom.LinearTransform.makeScaling(pixelScale) *
-          afwGeom.LinearTransform.makeRotation(rotAngle))
-    crpix = detector.transform(afwGeom.Point2D(0, 0), FOCAL_PLANE, PIXELS)
+    rotAngle = geom.Angle(nDegrees, geom.degrees)
+    cd = (geom.LinearTransform.makeScaling(pixelScale) *
+          geom.LinearTransform.makeRotation(rotAngle))
+    crpix = detector.transform(geom.Point2D(0, 0), FOCAL_PLANE, PIXELS)
     rotatedWcs = afwGeom.makeSkyWcs(crpix=crpix, crval=crval, cdMatrix=cd.getMatrix())
 
     rotatedExp = warper.warpExposure(rotatedWcs, exp)
-    rotatedExp.setXY0(afwGeom.Point2I(0, 0))
+    rotatedExp.setXY0(geom.Point2I(0, 0))
     return rotatedExp
 
 
