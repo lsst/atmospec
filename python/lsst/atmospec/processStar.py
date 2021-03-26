@@ -518,6 +518,7 @@ class ProcessStarTask(pipeBase.CmdLineTask):
         config.mainStarFluxCut
         config.mainStarRoundnessCut
         """
+        # TODO: probably replace all this with QFM
         fpSet = self.findObjects(exp)
         if self.config.mainSourceFindingMethod == 'ROUNDEST':
             source = self.getRoundestObject(fpSet, exp, fluxCut=self.config.mainStarFluxCut)
@@ -751,7 +752,7 @@ class ProcessStarTask(pipeBase.CmdLineTask):
                 if True:
                     overrideDict = {'SAVE': True,
                                     'OBS_NAME': 'AUXTEL',
-                                    'DEBUG': False,
+                                    'DEBUG': True,
                                     'DISPLAY': False,
                                     'VERBOSE': 0,
                                     # 'CCD_IMSIZE': 4000}
@@ -776,7 +777,7 @@ class ProcessStarTask(pipeBase.CmdLineTask):
 
                 target = exp.getMetadata()['OBJECT']
                 if self.config.forceObjectName:
-                    self.log.warn(f"Forcing target name from {target} to {self.config.forceObjectName}")
+                    self.log.info(f"Forcing target name from {target} to {self.config.forceObjectName}")
                     target = self.config.forceObjectName
 
                 if target in ['FlatField position', 'Park position', 'Test', 'NOTSET']:
