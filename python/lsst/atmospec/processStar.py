@@ -631,10 +631,27 @@ class ProcessStarTask(pipeBase.CmdLineTask):
                 raise RuntimeError(f"Failed to create output dir {outputRoot}")
         expId = dataRef.dataId['expId']
 
-        ret = self.run(exposure, outputRoot, expId, sourceCentroid)
+        result = self.run(exposure, outputRoot, expId, sourceCentroid)
         self.log.info("Finished processing %s" % (dataRef.dataId))
 
-        return ret
+        result.dataId = dataId
+        self.makeResultPickleable(result)
+        butler.put(result, 'spectraction', dataId)
+
+        return result
+
+    def makeResultPickleable(self, result):
+        """Remove unpicklable components from the output"""
+        result.image.target.build_sed = None
+        result.spectrum.target.build_sed = None
+        result.image.target.sed = None
+        result.spectrum.disperser.load_files = None
+        result.image.disperser.load_files = None
+
+        result.spectrum.disperser.N_fit = None
+        result.spectrum.disperser.N_interp = None
+        result.spectrum.disperser.ratio_order_2over1 = None
+        result.spectrum.disperser.theta = None
 
     def runAstrometry(self, butler, exp, icSrc):
         refObjLoaderConfig = LoadIndexedReferenceObjectsTask.ConfigClass()
@@ -765,14 +782,11 @@ class ProcessStarTask(pipeBase.CmdLineTask):
                 if target in ['FlatField position', 'Park position', 'Test', 'NOTSET']:
                     raise ValueError(f"OBJECT set to {target} - this is not a celestial object!")
 
-                spectractor.run(exp, *sourceCentroid, target, spectractorOutputRoot, expId)
+                result = spectractor.run(exp, *sourceCentroid, target, spectractorOutputRoot, expId)
             except Exception as e:
-                msg = f"Caught exception {e}, failing here so pdf can be written to {pdfPath}"
-                print(msg)
-                # if True:
-                #     raise RuntimeError from e
-                # import ipdb as pdb; pdb.set_trace()
-        return
+                # raise RuntimeError from e
+                self.log.warn(f"Caught exception {e}, failing here so pdf can be written to {pdfPath}")
+        return result
 
     def flatfield(self, exp, disp):
         """Placeholder for wavelength dependent flatfielding: TODO: DM-18141
