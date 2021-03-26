@@ -23,6 +23,8 @@
 
 import os
 import numpy as np
+import astropy.coordinates as asCoords
+from astropy import units as u
 
 from spectractor import parameters
 parameters.CALLING_CODE = "LSST_DM"  # this must be set IMMEDIATELY to supress colored logs
@@ -278,21 +280,22 @@ class SpectractorShim():
         vi = exp.getInfo().getVisitInfo()
 
         raDec = vi.getBoresightRaDec()
-        decLsst = raDec.getDec()
-
         dec = raDec.getDec()
+        dec = asCoords.Angle(dec.asDegrees(), unit=u.deg)
+
         hourAngle = vi.getBoresightHourAngle()
-        
+        hourAngle = asCoords.Angle(hourAngle.asDegrees(), unit=u.deg)
+
         weather = vi.getWeather()
         _temperature = weather.getAirTemperature()
-        temperature = _temperature if not np.isnan(_temperature) else None
+        temperature = _temperature if not np.isnan(_temperature) else 10  # maybe average?
         _pressure = weather.getAirPressure()
-        pressure = _pressure if not np.isnan(_pressure) else None
+        pressure = _pressure if not np.isnan(_pressure) else 732  # nominal for altitude?
         _humidity = weather.getHumidity()
-        humidity = _humidity if not np.isnan(_humidity) else None
+        humidity = _humidity if not np.isnan(_humidity) else None  # not a required param so no default
 
         airmass = vi.getBoresightAirmass()
-        spectrum.adr_params = [dec, hour_angle, temperature, pressure, humidity, airmass]
+        spectrum.adr_params = [dec, hourAngle, temperature, pressure, humidity, airmass]
 
     def run(self, exp, xpos, ypos, target, outputRoot, expId, binning=1, plotting=True):
         # run option kwargs in the original code, seems to ~always be True
@@ -358,7 +361,7 @@ class SpectractorShim():
 
         # Create Spectrum object
         spectrum = Spectrum(image=image)
-        # self.setAdrParameters(spectrum, exp)
+        self.setAdrParameters(spectrum, exp)
 
         # Subtract background and bad pixels
         extract_spectrum_from_image(image, spectrum, signal_width=parameters.PIXWIDTH_SIGNAL,
