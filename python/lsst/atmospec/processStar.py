@@ -676,7 +676,7 @@ class ProcessStarTask(pipeBase.CmdLineTask):
         # TODO: Change this to doing this the proper way
         referenceFilterName = self.config.referenceFilterOverride
         defineFilter(referenceFilterName, 656.28)
-        referenceFilter = afwImage.filter.Filter(referenceFilterName)
+        referenceFilter = afwImage.Filter(referenceFilterName)
         originalFilter = exp.getFilter()  # there's a better way of doing this with the task itself I think
         exp.setFilter(referenceFilter)
 
