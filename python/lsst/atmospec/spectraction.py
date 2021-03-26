@@ -329,15 +329,17 @@ class SpectractorShim():
             image.plot_image(scale='log10', target_pixcoords=(xpos, ypos))
             self.log.info(f"Pixel value at centroid = {image.data[int(ypos), int(xpos)]}")
 
-        if disperser == 'ronchi170lpmm':  # TODO: add something more robust as to whether to flip!
-            image, xpos, ypos = self.flipImageLeftRight(image, xpos, ypos)
-            self.displayImage(image, centroid=(xpos, ypos))
+        # XXX this needs removing or at least dealing with to not always just run! ASAP XXX
+        # if disperser == 'ronchi170lpmm':  # TODO: add something more robust as to whether to flip!
+        #     image, xpos, ypos = self.flipImageLeftRight(image, xpos, ypos)
+        #     self.displayImage(image, centroid=(xpos, ypos))
 
         # TODO: set image.target_guess = np.asarray((xpos, ypos)) I think - might be unnecessary
 
         # TODO: this needs to move up a level to processStar.py, and run as a new process
         # Use fast mode
         if binning > 1:
+            image.target_guess = (xpos, ypos)
             image = set_fast_mode(image)
             if parameters.DEBUG:
                 image.plot_image(scale='symlog', target_pixcoords=image.target_guess)
@@ -347,14 +349,14 @@ class SpectractorShim():
         # this part of Spectractor is certainly slow at the very least
         if True:  # TODO: change this to be an option, at least for testing vs LSST
             self.log.info('Search for the target in the image...')
-            _ = find_target(image, (xpos, ypos))  # sets the image.target_pixcoords
+            _ = find_target(image, image.target_guess)  # sets the image.target_pixcoords
             turn_image(image)  # creates the rotated data, and sets the image.target_pixcoords_rotated
 
             # Rotate the image: several methods
             # Find the exact target position in the rotated image:
             # several methods - but how are these controlled? MFL
             self.log.info('Search for the target in the rotated image...')
-            _ = find_target(image, (xpos, ypos), rotated=True, use_wcs=False)
+            _ = find_target(image, image.target_guess, rotated=True, use_wcs=False)
         else:
             # code path for if the image is pre-rotated by LSST code
             raise NotImplementedError
