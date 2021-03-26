@@ -368,7 +368,6 @@ class SpectractorShim():
         spectrum.atmospheric_lines = atmospheric_lines
         # Calibrate the spectrum
         calibrate_spectrum(spectrum)
-        return
 
         # Full forward model extraction: add transverse ADR and order 2 subtraction
         workspace = None
@@ -404,4 +403,23 @@ class SpectractorShim():
         # spectrum.lambdas = np.interp(distance, spectrum.pixels, spectrum.lambdas)
         spectrum.chromatic_psf.table['lambdas'] = spectrum.lambdas
         spectrum.chromatic_psf.table.write(outputFilenamePsf, overwrite=True)
-        return spectrum
+
+        result = Spectraction()
+        result.spectrum = spectrum
+        result.image = image
+        result.workspace = workspace
+        result.lsstExp = exp
+
+        return result  # XXX technically this should be a pipeBase.Struct I think
+
+
+class Spectraction:
+    """Simple class for holding any and all Spectractor outputs."""
+    # TODO: make this a data class? Annoying with so many args being required
+    # and positional though.
+
+    # spectrum: Spectrum
+    # spectrogram:
+    # disperser: Hologram
+    # image: Image
+    # workspace: FullForwardModelFitWorkspace
