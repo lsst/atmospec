@@ -54,6 +54,15 @@ from .spectraction import SpectractorShim
 
 COMMISSIONING = False  # allows illegal things for on the mountain usage.
 
+# TODO:
+# Sort out read noise and gain
+# remove dummy image totally
+# talk to Jeremy about turning the image beforehand and giving new coords
+# distance to CCD
+# not having ambient temp
+# fix astrometry failing
+# Gen3ification
+
 
 def getTargetCentroidFromWcs(exp, target, doMotionCorrection=True, logger=None):
     """Get the target's centroid, given an exposure with fitted WCS.
