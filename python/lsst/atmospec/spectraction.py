@@ -419,12 +419,12 @@ class SpectractorShim():
 
 
 class Spectraction:
-    """Simple class for holding any and all Spectractor outputs."""
-    # TODO: make this a data class? Annoying with so many args being required
-    # and positional though.
+    """A simple class for holding the Spectractor outputs.
 
-    # spectrum: Spectrum
-    # spectrogram:
-    # disperser: Hologram
-    # image: Image
-    # workspace: FullForwardModelFitWorkspace
+    Will likely be updated in future to provide some simple getters to allow
+    easier access to parts of the data structure, and perhaps some convenience
+    methods for interacting with the more awkward objects (e.g. the Lines).
+    """
+    # result.spectrum = spectrum
+    # result.image = image
+    # result.workspace = workspace
