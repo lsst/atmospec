@@ -52,7 +52,6 @@ COMMISSIONING = False  # allows illegal things for on the mountain usage.
 # Sort out read noise and gain
 # remove dummy image totally
 # talk to Jeremy about turning the image beforehand and giving new coords
-# distance to CCD
 # deal with not having ambient temp
 # fix astrometry failing
 # Gen3ification
@@ -630,7 +629,15 @@ class ProcessStarTask(pipeBase.CmdLineTask):
                     overrideDict = {}
                     supplementDict = {}
 
-                overrideDict['DISTANCE2CCD'] = 175  # TODO: change to a calculation based on LINPOS
+                # TODO: think if this is the right place for this
+                # probably wants to go in spectraction.py really
+                md = exp.getMetadata()
+                linearStagePosition = 115  # this seems to be the rough zero-point for some reason
+                if 'LINSPOS' in md:
+                    position = md['LINSPOS']  # linear stage position in mm from CCD, larger->further from CCD
+                    if position is not None:
+                        linearStagePosition += position
+                overrideDict['DISTANCE2CCD'] = linearStagePosition
 
                 # Note - flow is that the config file is loaded, then overrides are
                 # applied, then supplements are set.
