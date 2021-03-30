@@ -59,9 +59,16 @@ COMMISSIONING = False  # allows illegal things for on the mountain usage.
 # remove dummy image totally
 # talk to Jeremy about turning the image beforehand and giving new coords
 # distance to CCD
-# not having ambient temp
+# deal with not having ambient temp
 # fix astrometry failing
 # Gen3ification
+# astropy warning for units on save
+# but actually just remove all manual saves entirely, I think?
+# binning to config option
+# Make SED persistable
+# Move free floating methods to utils
+# Move to QFM for star finding failover case
+# Remove old cruft functions
 
 
 def getTargetCentroidFromWcs(exp, target, doMotionCorrection=True, logger=None):
