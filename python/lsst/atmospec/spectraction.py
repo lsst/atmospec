@@ -140,7 +140,8 @@ class SpectractorShim():
         object in place where possible. Where this is not possible the methods
         are labeled _setSomething().
         """
-        file_name = '/home/mfl/lsst/Spectractor/tests/data/auxtel_first_light-1.fits'  # xxx REALLY needs removing
+        # XXX This REALLY needs removing
+        file_name = '/home/mfl/lsst/Spectractor/tests/data/auxtel_first_light-1.fits'
         image = Image(file_name=file_name, target_label=target_label, disperser_label=disperser_label)
 
         image.data = self._getImageData(exp)
@@ -388,7 +389,8 @@ class SpectractorShim():
                 workspace.p[1] = spectrum.disperser.D
                 workspace.p[2] = spectrum.header['PIXSHIFT']
                 # Compare with truth if available
-                if parameters.PSF_EXTRACTION_MODE == "PSF_2D" and 'LBDAS_T' in spectrum.header and parameters.DEBUG:
+                if (parameters.PSF_EXTRACTION_MODE == "PSF_2D" and
+                   'LBDAS_T' in spectrum.header and parameters.DEBUG):
                     plot_comparison_truth(spectrum, workspace)
 
         # Save the spectrum
