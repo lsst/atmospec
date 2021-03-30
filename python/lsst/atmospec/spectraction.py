@@ -414,7 +414,6 @@ class SpectractorShim():
         result.spectrum = spectrum
         result.image = image
         result.workspace = workspace
-        result.lsstExp = exp
 
         return result  # XXX technically this should be a pipeBase.Struct I think
 
