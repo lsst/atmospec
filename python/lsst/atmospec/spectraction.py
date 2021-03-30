@@ -153,7 +153,6 @@ class SpectractorShim():
 
         self._setImageAndHeaderInfo(image, exp)  # sets image attributes
 
-        # image.expo = exp.getInfo().getVisitInfo().getExposureTime()  # set in header setter
         assert image.expo is not None
         assert image.expo != 0
         assert image.expo > 0
@@ -215,9 +214,9 @@ class SpectractorShim():
         if constValue is not None:
             spectractorImage.read_out_noise = np.ones_like(spectractorImage.data) * constValue
         else:
+            # TODO: Check with Jeremy if we want the raw read noise
+            # or the per-pixel variance. Either is doable, just need to know.
             raise NotImplementedError("Setting noise image from exp variance not implemented")
-            # spectractorImage.read_out_noise = np.ones_like(spectractorImage.data)
-            # spectractorImage.read_out_noise = exp.variance.array
 
     def _setReadNoiseToNone(self, spectractorImage):
         spectractorImage.read_out_noise = None
@@ -277,7 +276,8 @@ class SpectractorShim():
             disp1.dot('x', centroid[0], centroid[1], size=100)
 
     def setAdrParameters(self, spectrum, exp):
-        # adr_params = [dec, hour_angle, temperature, pressure, humidity, airmass]
+        # The adr_params parameter format expected by spectractor are:
+        # [dec, hour_angle, temperature, pressure, humidity, airmass]
         vi = exp.getInfo().getVisitInfo()
 
         raDec = vi.getBoresightRaDec()
@@ -306,7 +306,6 @@ class SpectractorShim():
         # TODO: rename _makePath _makeOutputPath
         self._makePath(outputRoot, plotting=plotting)  # early in case this fails, as processing is slow
 
-        # TODO: once objects are returned, change these to be a butler.put() or other persistence
         # TODO: change to f-strings
         outputFilenameSpectrum = os.path.join(outputRoot, 'v'+str(expId)+'_spectrum.fits')
         outputFilenameSpectrogram = os.path.join(outputRoot, 'v'+str(expId)+'_spectrogram.fits')
@@ -315,7 +314,8 @@ class SpectractorShim():
 
         # Upstream loads config file here
 
-        # TODO: passing exact centroids seems to be causing a serious and non-obvious problem
+        # TODO: passing exact centroids seems to be causing a serious
+        # and non-obvious problem!
         # this needs fixing for several reasons, mostly because if we have a
         # known good centroid then we want to skip the refitting entirely
         xpos = int(np.round(xpos))
@@ -330,12 +330,12 @@ class SpectractorShim():
             image.plot_image(scale='log10', target_pixcoords=(xpos, ypos))
             self.log.info(f"Pixel value at centroid = {image.data[int(ypos), int(xpos)]}")
 
-        # XXX this needs removing or at least dealing with to not always just run! ASAP XXX
-        # if disperser == 'ronchi170lpmm':  # TODO: add something more robust as to whether to flip!
+        # XXX this needs removing or at least dealing with to not always
+        # just run! ASAP XXX
+        # if disperser == 'ronchi170lpmm':
+        # TODO: add something more robust as to whether to flip!
         #     image, xpos, ypos = self.flipImageLeftRight(image, xpos, ypos)
         #     self.displayImage(image, centroid=(xpos, ypos))
-
-        # TODO: set image.target_guess = np.asarray((xpos, ypos)) I think - might be unnecessary
 
         # Use fast mode
         if binning > 1:
@@ -374,7 +374,8 @@ class SpectractorShim():
         # Calibrate the spectrum
         calibrate_spectrum(spectrum)
 
-        # Full forward model extraction: add transverse ADR and order 2 subtraction
+        # Full forward model extraction:
+        # adds transverse ADR and order 2 subtraction
         workspace = None
         if parameters.PSF_EXTRACTION_MODE == "PSF_2D":
             workspace = FullForwardModelFitWorkspace(spectrum, verbose=1, plot=True, live_fit=False,
@@ -399,14 +400,12 @@ class SpectractorShim():
         spectrum.save_spectrogram(outputFilenameSpectrogram, overwrite=True)
         spectrum.lines.print_detected_lines(output_file_name=outputFilenameLines,
                                             overwrite=True, amplitude_units=spectrum.units)
-        # Plot the spectrum
 
+        # Plot the spectrum
         parameters.DISPLAY = True
         if parameters.VERBOSE and parameters.DISPLAY:
             spectrum.plot_spectrum(xlim=None)
 
-        # distance = spectrum.chromatic_psf.get_distance_along_dispersion_axis()
-        # spectrum.lambdas = np.interp(distance, spectrum.pixels, spectrum.lambdas)
         spectrum.chromatic_psf.table['lambdas'] = spectrum.lambdas
         spectrum.chromatic_psf.table.write(outputFilenamePsf, overwrite=True)
 
@@ -415,7 +414,9 @@ class SpectractorShim():
         result.image = image
         result.workspace = workspace
 
-        return result  # XXX technically this should be a pipeBase.Struct I think
+        # XXX technically this should be a pipeBase.Struct I think
+        # change it if it matters
+        return result
 
 
 class Spectraction:

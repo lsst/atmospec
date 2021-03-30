@@ -196,9 +196,9 @@ class ProcessStarTaskConfig(pexConfig.Config):
 
         self.charImage.doApCorr = False
         self.charImage.doMeasurePsf = False
-        # if self.charImage.doMeasurePsf:
-        #     self.charImage.measurePsf.starSelector['objectSize'].signalToNoiseMin = 10.0
-        #     self.charImage.measurePsf.starSelector['objectSize'].fluxMin = 5000.0
+        if self.charImage.doMeasurePsf:
+            self.charImage.measurePsf.starSelector['objectSize'].signalToNoiseMin = 10.0
+            self.charImage.measurePsf.starSelector['objectSize'].fluxMin = 5000.0
         self.charImage.detection.includeThresholdMultiplier = 3
         self.isr.overscan.fitType = 'MEDIAN_PER_ROW'
 
@@ -639,8 +639,8 @@ class ProcessStarTask(pipeBase.CmdLineTask):
                         linearStagePosition += position
                 overrideDict['DISTANCE2CCD'] = linearStagePosition
 
-                # Note - flow is that the config file is loaded, then overrides are
-                # applied, then supplements are set.
+                # Note - flow is that the config file is loaded, then overrides
+                # are applied, then supplements are set.
                 configFilename = '/home/mfl/lsst/Spectractor/config/auxtel.ini'
                 spectractor = SpectractorShim(configFile=configFilename,
                                               paramOverrides=overrideDict,
