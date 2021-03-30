@@ -337,7 +337,6 @@ class SpectractorShim():
 
         # TODO: set image.target_guess = np.asarray((xpos, ypos)) I think - might be unnecessary
 
-        # TODO: this needs to move up a level to processStar.py, and run as a new process
         # Use fast mode
         if binning > 1:
             image.target_guess = (xpos, ypos)

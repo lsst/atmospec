@@ -58,10 +58,10 @@ COMMISSIONING = False  # allows illegal things for on the mountain usage.
 # Gen3ification
 # astropy warning for units on save
 # but actually just remove all manual saves entirely, I think?
-# binning to config option
 # Make SED persistable
 # Move to QFM for star finding failover case
 # Remove old cruft functions
+# change spectractions run method to be ~all kwargs with *,...
 
 
 class ProcessStarTaskConfig(pexConfig.Config):
@@ -162,6 +162,11 @@ class ProcessStarTaskConfig(pexConfig.Config):
             "-1": "Use the m-1 spectrum",
             "both": "Use both spectra",
         }
+    )
+    binning = pexConfig.Field(
+        dtype=int,
+        doc="Bin the input image by this factor",
+        default=4
     )
     doFlat = pexConfig.Field(
         dtype=bool,
@@ -643,7 +648,8 @@ class ProcessStarTask(pipeBase.CmdLineTask):
                 if target in ['FlatField position', 'Park position', 'Test', 'NOTSET']:
                     raise ValueError(f"OBJECT set to {target} - this is not a celestial object!")
 
-                result = spectractor.run(exp, *sourceCentroid, target, spectractorOutputRoot, expId)
+                result = spectractor.run(exp, *sourceCentroid, target, spectractorOutputRoot, expId,
+                                         binning=self.config.binning)
             except Exception as e:
                 # raise RuntimeError from e
                 self.log.warn(f"Caught exception {e}, failing here so pdf can be written to {pdfPath}")
