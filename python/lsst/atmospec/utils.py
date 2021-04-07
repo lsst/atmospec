@@ -28,6 +28,7 @@ import lsst.log as lsstLog
 import lsst.afw.geom as afwGeom
 import lsst.geom as geom
 from lsst.afw.cameraGeom import PIXELS, FOCAL_PLANE
+from lsst.obs.lsst.translators.lsst import FILTER_DELIMITER
 
 import astropy
 import astropy.units as u
@@ -447,3 +448,25 @@ def vizierLocationForTarget(exp, target, doMotionCorrection):
     dec = geom.Angle(decRad)
     targetLocation = geom.SpherePoint(ra, dec)
     return targetLocation
+
+
+def isDispersedExp(exp):
+    """Check if an exposure is dispersed."""
+    filterFullName = exp.getFilterLabel().physicalLabel
+    if FILTER_DELIMITER not in filterFullName:
+        raise RuntimeError(f"Error parsing filter name {filterFullName}")
+    filt, grating = filterFullName.split(FILTER_DELIMITER)
+    if grating.upper().startswith('EMPTY'):
+        return False
+    return True
+
+
+def isDispersedDataId(dataId, butler):
+    """Check if a dataId corresponds to a dispersed image."""
+    filterFullName = butler.queryMetadata('raw', 'filter', **dataId)[0]
+    if FILTER_DELIMITER not in filterFullName:
+        raise RuntimeError(f"Error parsing filter name {filterFullName}")
+    filt, grating = filterFullName.split(FILTER_DELIMITER)
+    if grating.upper().startswith('EMPTY'):
+        return False
+    return True

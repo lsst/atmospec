@@ -95,7 +95,7 @@ class NightStellarSpectra():
         self._loadExtractions(ignoreSeqNums)
         # xxx maybe just load everything and then call removeSeqNums()?
 
-    def isDispersed(self, seqNum):
+    def isDispersed(self, seqNum):  # TODO: change this to use the isDispersedDataId in utils
         """Match object and check is dispersed"""
         filt = self.butler.queryMetadata('raw', 'filter', dayObs=self.dayObs, seqNum=seqNum)[0]
         grating = filt.split(FILTER_DELIMITER)[1]
