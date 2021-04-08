@@ -177,6 +177,11 @@ class ProcessStarTaskConfig(pexConfig.Config):
         doc="Repair cosmic rays?",
         default=True
     )
+    doDisplayPlots = pexConfig.Field(
+        dtype=bool,
+        doc="Matplotlib show() the plots, so they show up in a notebook or X window",
+        default=False
+    )
     forceObjectName = pexConfig.Field(
         dtype=str,
         doc="A supplementary name for OBJECT. Will be forced to apply to ALL visits, so this should only"
@@ -617,7 +622,7 @@ class ProcessStarTask(pipeBase.CmdLineTask):
                     overrideDict = {'SAVE': True,
                                     'OBS_NAME': 'AUXTEL',
                                     'DEBUG': True,
-                                    'DISPLAY': False,
+                                    'DISPLAY': self.config.doDisplayPlots,
                                     'VERBOSE': 0,
                                     # 'CCD_IMSIZE': 4000}
                                     }
