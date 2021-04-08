@@ -306,7 +306,7 @@ class SpectractorShim():
         # TODO: rename _makePath _makeOutputPath
         self._makePath(outputRoot, plotting=plotting)  # early in case this fails, as processing is slow
 
-        # TODO: change to f-strings
+        # TODO: change to f-strings OR actually remove totally as this isn't how we're doing this now
         outputFilenameSpectrum = os.path.join(outputRoot, 'v'+str(expId)+'_spectrum.fits')
         outputFilenameSpectrogram = os.path.join(outputRoot, 'v'+str(expId)+'_spectrogram.fits')
         outputFilenamePsf = os.path.join(outputRoot, 'v'+str(expId)+'_table.csv')
@@ -372,26 +372,59 @@ class SpectractorShim():
                                     right_edge=parameters.CCD_IMSIZE)  # MFL: this used to be CCD_IMSIZE-200
         spectrum.atmospheric_lines = atmospheric_lines
         # Calibrate the spectrum
-        calibrate_spectrum(spectrum)
+        with_adr = True
+        if parameters.OBS_OBJECT_TYPE != "STAR":
+            # XXX Check what this is set to, and how
+            # likely need to be passed through
+            with_adr = False
+        calibrate_spectrum(spectrum, with_adr=with_adr)
+
+        # not necessarily set during fit, but required to be present for
+        # astropy fits writing to work (required to be in keeping with upstream)
+        spectrum.data_order2 = np.zeros_like(spectrum.lambdas_order2)
+        spectrum.err_order2 = np.zeros_like(spectrum.lambdas_order2)
 
         # Full forward model extraction:
         # adds transverse ADR and order 2 subtraction
-        workspace = None
-        if parameters.PSF_EXTRACTION_MODE == "PSF_2D":
-            workspace = FullForwardModelFitWorkspace(spectrum, verbose=1, plot=True, live_fit=False,
-                                                     amplitude_priors_method="spectrum")
+        w = None
+        if parameters.PSF_EXTRACTION_MODE == "PSF_2D" and parameters.OBS_OBJECT_TYPE == "STAR":
+            w = FullForwardModelFitWorkspace(spectrum, verbose=1, plot=True, live_fit=False,
+                                             amplitude_priors_method="spectrum")
             for i in range(2):
                 spectrum.convert_from_flam_to_ADUrate()
-                spectrum = run_ffm_minimisation(workspace, method="newton")
+                spectrum = run_ffm_minimisation(w, method="newton")
 
                 # Calibrate the spectrum
-                calibrate_spectrum(spectrum)
-                workspace.p[1] = spectrum.disperser.D
-                workspace.p[2] = spectrum.header['PIXSHIFT']
+                calibrate_spectrum(spectrum, with_adr=False)  # XXX MFL: why isn't this with_adr=with_adr?
+                w.p[1] = spectrum.disperser.D
+                w.p[2] = spectrum.header['PIXSHIFT']
+
+                # Recompute and save params in class attributes
+                w.simulate(*w.p)
+
+                # Propagate parameters
+                A2, D2CCD, dx0, dy0, angle, B, *poly_params = w.p
+                w.spectrum.rotation_angle = angle
+                w.spectrum.spectrogram_bgd *= B
+                w.spectrum.spectrogram_bgd_rms *= B
+                w.spectrum.spectrogram_x0 += dx0
+                w.spectrum.spectrogram_y0 += dy0
+                w.spectrum.x0[0] += dx0
+                w.spectrum.x0[1] += dy0
+                w.spectrum.header["TARGETX"] = w.spectrum.x0[0]
+                w.spectrum.header["TARGETY"] = w.spectrum.x0[1]
+
+                # Compute order 2 contamination
+                w.spectrum.lambdas_order2 = w.lambdas
+                w.spectrum.data_order2 = (A2 * w.amplitude_params *
+                                          w.spectrum.disperser.ratio_order_2over1(w.lambdas))
+                w.spectrum.err_order2 = (A2 * w.amplitude_params_err *
+                                         w.spectrum.disperser.ratio_order_2over1(w.lambdas))
+
                 # Compare with truth if available
                 if (parameters.PSF_EXTRACTION_MODE == "PSF_2D" and
                    'LBDAS_T' in spectrum.header and parameters.DEBUG):
-                    plot_comparison_truth(spectrum, workspace)
+                    plot_comparison_truth(spectrum, w)
 
         # Save the spectrum
         self._ensureFitsHeader(spectrum)  # SIMPLE is missing by default
@@ -412,7 +445,7 @@ class SpectractorShim():
         result = Spectraction()
         result.spectrum = spectrum
         result.image = image
-        result.workspace = workspace
+        result.w = w
 
         # XXX technically this should be a pipeBase.Struct I think
         # change it if it matters
@@ -428,4 +461,4 @@ class Spectraction:
     """
     # result.spectrum = spectrum
     # result.image = image
-    # result.workspace = workspace
+    # result.w = w
