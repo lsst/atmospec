@@ -616,55 +616,67 @@ class ProcessStarTask(pipeBase.CmdLineTask):
         reload(plt)  # reset matplotlib color cycles when multiprocessing
         pdfPath = os.path.join(spectractorOutputRoot, 'plots.pdf')
         starNames = self.loadStarNames()
-        with PdfPages(pdfPath) as pdf:
+
+        if True:
+            overrideDict = {'SAVE': True,
+                            'OBS_NAME': 'AUXTEL',
+                            'DEBUG': True,
+                            'DISPLAY': self.config.doDisplayPlots,
+                            'VERBOSE': 0,
+                            # 'CCD_IMSIZE': 4000}
+                            }
+            supplementDict = {'CALLING_CODE': 'LSST_DM',
+                              'STAR_NAMES': starNames}
+
+            # anything that changes between dataRefs!
+            resetParameters = {'LSST_SAVEFIGPATH': spectractorOutputRoot}
+        else:
+            overrideDict = {}
+            supplementDict = {}
+
+        # TODO: think if this is the right place for this
+        # probably wants to go in spectraction.py really
+        md = exp.getMetadata()
+        linearStagePosition = 115  # this seems to be the rough zero-point for some reason
+        if 'LINSPOS' in md:
+            position = md['LINSPOS']  # linear stage position in mm from CCD, larger->further from CCD
+            if position is not None:
+                linearStagePosition += position
+        overrideDict['DISTANCE2CCD'] = linearStagePosition
+
+        target = exp.getMetadata()['OBJECT']
+        if self.config.forceObjectName:
+            self.log.info(f"Forcing target name from {target} to {self.config.forceObjectName}")
+            target = self.config.forceObjectName
+
+        if target in ['FlatField position', 'Park position', 'Test', 'NOTSET']:
+            raise ValueError(f"OBJECT set to {target} - this is not a celestial object!")
+
+        # Note - flow is that the config file is loaded, then overrides
+        # are applied, then supplements are set.
+        configFilename = '/home/mfl/lsst/Spectractor/config/auxtel.ini'
+
+        if self.config.doDisplayPlots:  # no pdfpages backend - isn't compatible with display-as-you-go
+            spectractor = SpectractorShim(configFile=configFilename,
+                                          paramOverrides=overrideDict,
+                                          supplementaryParameters=supplementDict,
+                                          resetParameters=resetParameters)
+            result = spectractor.run(exp, *sourceCentroid, target, spectractorOutputRoot, expId,
+                                     binning=self.config.binning)
+        else:
             try:  # need a try here so that the context manager always exits cleanly so plots always written
-                if True:
-                    overrideDict = {'SAVE': True,
-                                    'OBS_NAME': 'AUXTEL',
-                                    'DEBUG': True,
-                                    'DISPLAY': self.config.doDisplayPlots,
-                                    'VERBOSE': 0,
-                                    # 'CCD_IMSIZE': 4000}
-                                    }
-                    supplementDict = {'CALLING_CODE': 'LSST_DM',
-                                      'STAR_NAMES': starNames}
-                    resetParameters = {'PdfPages': pdf,  # anything that changes between dataRefs!
-                                       'LSST_SAVEFIGPATH': spectractorOutputRoot}
-                else:
-                    overrideDict = {}
-                    supplementDict = {}
+                with PdfPages(pdfPath) as pdf:
+                    resetParameters['PdfPages'] = pdf
+                    spectractor = SpectractorShim(configFile=configFilename,
+                                                  paramOverrides=overrideDict,
+                                                  supplementaryParameters=supplementDict,
+                                                  resetParameters=resetParameters)
 
-                # TODO: think if this is the right place for this
-                # probably wants to go in spectraction.py really
-                md = exp.getMetadata()
-                linearStagePosition = 115  # this seems to be the rough zero-point for some reason
-                if 'LINSPOS' in md:
-                    position = md['LINSPOS']  # linear stage position in mm from CCD, larger->further from CCD
-                    if position is not None:
-                        linearStagePosition += position
-                overrideDict['DISTANCE2CCD'] = linearStagePosition
-
-                # Note - flow is that the config file is loaded, then overrides
-                # are applied, then supplements are set.
-                configFilename = '/home/mfl/lsst/Spectractor/config/auxtel.ini'
-                spectractor = SpectractorShim(configFile=configFilename,
-                                              paramOverrides=overrideDict,
-                                              supplementaryParameters=supplementDict,
-                                              resetParameters=resetParameters)
-
-                target = exp.getMetadata()['OBJECT']
-                if self.config.forceObjectName:
-                    self.log.info(f"Forcing target name from {target} to {self.config.forceObjectName}")
-                    target = self.config.forceObjectName
-
-                if target in ['FlatField position', 'Park position', 'Test', 'NOTSET']:
-                    raise ValueError(f"OBJECT set to {target} - this is not a celestial object!")
-
-                result = spectractor.run(exp, *sourceCentroid, target, spectractorOutputRoot, expId,
-                                         binning=self.config.binning)
+                    result = spectractor.run(exp, *sourceCentroid, target, spectractorOutputRoot, expId,
+                                             binning=self.config.binning)
             except Exception as e:
-                # raise RuntimeError from e
-                self.log.warn(f"Caught exception {e}, failing here so pdf can be written to {pdfPath}")
+                self.log.warn(f"Caught exception {e}, passing here so pdf can be written to {pdfPath}")
+                result = None
         return result
 
     def flatfield(self, exp, disp):
