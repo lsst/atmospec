@@ -394,8 +394,8 @@ class ProcessStarTask(pipeBase.CmdLineTask):
                                              roundnessCut=self.config.mainStarRoundnessCut)
         else:
             # should be impossible as this is a choice field, but still
-            raise RuntimeError(f"Invalid source finding method"
-                               "selected: {self.config.mainSourceFindingMethod}")
+            raise RuntimeError("Invalid source finding method "
+                               f"selected: {self.config.mainSourceFindingMethod}")
         return source.getCentroid()
 
     def updateMetadata(self, exp, **kwargs):
@@ -479,7 +479,7 @@ class ProcessStarTask(pipeBase.CmdLineTask):
                 sourceCentroid = getTargetCentroidFromWcs(exposure, target, logger=self.log)
             else:
                 sourceCentroid = self.findMainSource(exposure)
-                self.log.warn(f"Astrometric fit failed, failing over to source-finding centroid")
+                self.log.warn("Astrometric fit failed, failing over to source-finding centroid")
                 self.log.info(f"Centroid of main star at: {sourceCentroid!r}")
 
             self.updateMetadata(exposure, centroid=sourceCentroid)

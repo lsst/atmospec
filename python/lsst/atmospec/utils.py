@@ -279,8 +279,8 @@ def rotateExposure(exp, nDegrees, kernelName='lanczos4', logger=None):
     pixelScale = wcs.getPixelScale().asDegrees()
     crval = wcs.getSkyOrigin()
     rotAngle = geom.Angle(nDegrees, geom.degrees)
-    cd = (geom.LinearTransform.makeScaling(pixelScale) *
-          geom.LinearTransform.makeRotation(rotAngle))
+    cd = (geom.LinearTransform.makeScaling(pixelScale)
+          * geom.LinearTransform.makeRotation(rotAngle))
     crpix = detector.transform(geom.Point2D(0, 0), FOCAL_PLANE, PIXELS)
     rotatedWcs = afwGeom.makeSkyWcs(crpix=crpix, crval=crval, cdMatrix=cd.getMatrix())
 

@@ -31,7 +31,7 @@ __all__ = ['DispersionRelation']
 
 class DispersionRelation(object):
     def __init__(self, observedLines, spectralLines):
-        """The dispersion relation, relating pixel to wavelength and vice versa.
+        """The dispersion relation, relating pixel to wavelength and vice versa
 
         Parameters:
         -----------

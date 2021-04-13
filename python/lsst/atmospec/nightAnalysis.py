@@ -140,8 +140,8 @@ class NightStellarSpectra():
                 else:
                     nIgnored += 1
 
-        msg = (f"Found {len(self.seqNums)+nIgnored} dispersed observations of " +
-               f"{self.targetName} on {self.dayObs} in registry")
+        msg = (f"Found {len(self.seqNums)+nIgnored} dispersed observations of "
+               + f"{self.targetName} on {self.dayObs} in registry")
         if nIgnored:
             msg += f" of which {nIgnored} were skipped."
         print(msg)

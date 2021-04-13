@@ -33,9 +33,9 @@ from spectractor.config import load_config  # noqa: E402
 from spectractor.extractor.images import Image, find_target, turn_image  # noqa: E402
 
 from spectractor.extractor.dispersers import Hologram  # noqa: E402
-from spectractor.extractor.extractor import (set_fast_mode, FullForwardModelFitWorkspace,
-                                             plot_comparison_truth, run_ffm_minimisation,
-                                             extract_spectrum_from_image)  # noqa: E402
+from spectractor.extractor.extractor import (set_fast_mode, FullForwardModelFitWorkspace,  # noqa: E402
+                                             plot_comparison_truth, run_ffm_minimisation,  # noqa: E402
+                                             extract_spectrum_from_image)
 from spectractor.extractor.spectrum import Spectrum, calibrate_spectrum  # noqa: E402
 
 import lsst.log as lsstLog  # noqa: E402
@@ -306,7 +306,7 @@ class SpectractorShim():
         # TODO: rename _makePath _makeOutputPath
         self._makePath(outputRoot, plotting=plotting)  # early in case this fails, as processing is slow
 
-        # TODO: change to f-strings OR actually remove totally as this isn't how we're doing this now
+        # TODO: change to f-strings OR actually remove totally?
         outputFilenameSpectrum = os.path.join(outputRoot, 'v'+str(expId)+'_spectrum.fits')
         outputFilenameSpectrogram = os.path.join(outputRoot, 'v'+str(expId)+'_spectrogram.fits')
         outputFilenamePsf = os.path.join(outputRoot, 'v'+str(expId)+'_table.csv')
@@ -339,6 +339,7 @@ class SpectractorShim():
 
         # Use fast mode
         if binning > 1:
+            # TODO: Fix bug here where the passed parameter isn't used!
             image.target_guess = (xpos, ypos)
             image = set_fast_mode(image)
             if parameters.DEBUG:
@@ -379,8 +380,8 @@ class SpectractorShim():
             with_adr = False
         calibrate_spectrum(spectrum, with_adr=with_adr)
 
-        # not necessarily set during fit, but required to be present for
-        # astropy fits writing to work (required to be in keeping with upstream)
+        # not necessarily set during fit but required to be present for astropy
+        # fits writing to work (required to be in keeping with upstream)
         spectrum.data_order2 = np.zeros_like(spectrum.lambdas_order2)
         spectrum.err_order2 = np.zeros_like(spectrum.lambdas_order2)
 
@@ -416,14 +417,14 @@ class SpectractorShim():
 
                 # Compute order 2 contamination
                 w.spectrum.lambdas_order2 = w.lambdas
-                w.spectrum.data_order2 = (A2 * w.amplitude_params *
-                                          w.spectrum.disperser.ratio_order_2over1(w.lambdas))
-                w.spectrum.err_order2 = (A2 * w.amplitude_params_err *
-                                         w.spectrum.disperser.ratio_order_2over1(w.lambdas))
+                w.spectrum.data_order2 = (A2 * w.amplitude_params
+                                          * w.spectrum.disperser.ratio_order_2over1(w.lambdas))
+                w.spectrum.err_order2 = (A2 * w.amplitude_params_err
+                                         * w.spectrum.disperser.ratio_order_2over1(w.lambdas))
 
                 # Compare with truth if available
-                if (parameters.PSF_EXTRACTION_MODE == "PSF_2D" and
-                   'LBDAS_T' in spectrum.header and parameters.DEBUG):
+                if (parameters.PSF_EXTRACTION_MODE == "PSF_2D"
+                        and 'LBDAS_T' in spectrum.header and parameters.DEBUG):
                     plot_comparison_truth(spectrum, w)
 
         # Save the spectrum
