@@ -652,9 +652,8 @@ class ProcessStarTask(pipeBase.CmdLineTask):
         if target in ['FlatField position', 'Park position', 'Test', 'NOTSET']:
             raise ValueError(f"OBJECT set to {target} - this is not a celestial object!")
 
-        # Note - flow is that the config file is loaded, then overrides
-        # are applied, then supplements are set.
-        configFilename = '/home/mfl/lsst/Spectractor/config/auxtel.ini'
+        packageDir = getPackageDir('atmospec')
+        configFilename = os.path.join(packageDir, 'config', 'auxtel.ini')
 
         if self.config.doDisplayPlots:  # no pdfpages backend - isn't compatible with display-as-you-go
             spectractor = SpectractorShim(configFile=configFilename,
