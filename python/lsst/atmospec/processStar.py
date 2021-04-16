@@ -623,7 +623,7 @@ class ProcessStarTask(pipeBase.CmdLineTask):
         starNames = self.loadStarNames()
 
         if True:
-            overrideDict = {'SAVE': self.config.doSavePlots,
+            overrideDict = {'SAVE': False,
                             'OBS_NAME': 'AUXTEL',
                             'DEBUG': True,
                             'DISPLAY': self.config.doDisplayPlots,
@@ -635,7 +635,9 @@ class ProcessStarTask(pipeBase.CmdLineTask):
                               'STAR_NAMES': starNames}
 
             # anything that changes between dataRefs!
-            resetParameters = {'LSST_SAVEFIGPATH': spectractorOutputRoot}
+            resetParameters = {}
+            if self.config.doSavePlots:
+                resetParameters['LSST_SAVEFIGPATH'] = spectractorOutputRoot
         else:
             overrideDict = {}
             supplementDict = {}
