@@ -182,6 +182,11 @@ class ProcessStarTaskConfig(pexConfig.Config):
         doc="Matplotlib show() the plots, so they show up in a notebook or X window",
         default=False
     )
+    doSavePlots = pexConfig.Field(
+        dtype=bool,
+        doc="Save matplotlib plots to output rerun?",
+        default=False
+    )
     forceObjectName = pexConfig.Field(
         dtype=str,
         doc="A supplementary name for OBJECT. Will be forced to apply to ALL visits, so this should only"
@@ -618,10 +623,11 @@ class ProcessStarTask(pipeBase.CmdLineTask):
         starNames = self.loadStarNames()
 
         if True:
-            overrideDict = {'SAVE': True,
+            overrideDict = {'SAVE': self.config.doSavePlots,
                             'OBS_NAME': 'AUXTEL',
                             'DEBUG': True,
                             'DISPLAY': self.config.doDisplayPlots,
+                            'CCD_REBIN': self.config.binning,
                             'VERBOSE': 0,
                             # 'CCD_IMSIZE': 4000}
                             }
