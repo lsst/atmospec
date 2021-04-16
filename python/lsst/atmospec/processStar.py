@@ -187,6 +187,16 @@ class ProcessStarTaskConfig(pexConfig.Config):
         doc="Save matplotlib plots to output rerun?",
         default=False
     )
+    spectractorDebugMode = pexConfig.Field(
+        dtype=bool,
+        doc="Set debug mode for Spectractor",
+        default=False
+    )
+    spectractorDebugLogging = pexConfig.Field(
+        dtype=bool,
+        doc="Set debug logging for Spectractor",
+        default=False
+    )
     forceObjectName = pexConfig.Field(
         dtype=str,
         doc="A supplementary name for OBJECT. Will be forced to apply to ALL visits, so this should only"
@@ -625,7 +635,8 @@ class ProcessStarTask(pipeBase.CmdLineTask):
         if True:
             overrideDict = {'SAVE': False,
                             'OBS_NAME': 'AUXTEL',
-                            'DEBUG': True,
+                            'DEBUG': self.config.spectractorDebugMode,
+                            'DEBUG_LOGGING': self.config.spectractorDebugLogging,
                             'DISPLAY': self.config.doDisplayPlots,
                             'CCD_REBIN': self.config.binning,
                             'VERBOSE': 0,
