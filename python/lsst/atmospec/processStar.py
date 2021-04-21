@@ -31,7 +31,6 @@ from importlib import reload
 
 import lsstDebug
 import lsst.afw.image as afwImage
-from lsst.afw.image.utils import defineFilter
 import lsst.geom as geom
 from lsst.ip.isr import IsrTask
 import lsst.pex.config as pexConfig
@@ -559,10 +558,9 @@ class ProcessStarTask(pipeBase.CmdLineTask):
 
         # TODO: Change this to doing this the proper way
         referenceFilterName = self.config.referenceFilterOverride
-        defineFilter(referenceFilterName, 656.28)
-        referenceFilter = afwImage.Filter(referenceFilterName)
+        referenceFilterLabel = afwImage.FilterLabel(physical=referenceFilterName, band=referenceFilterName)
         originalFilter = exp.getFilter()  # there's a better way of doing this with the task itself I think
-        exp.setFilter(referenceFilter)
+        exp.setFilterLabel(referenceFilterLabel)
 
         try:
             astromResult = solver.run(sourceCat=icSrc, exposure=exp)
