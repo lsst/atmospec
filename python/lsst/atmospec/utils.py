@@ -257,7 +257,6 @@ def rotateExposure(exp, nDegrees, kernelName='lanczos4', logger=None):
     rotatedExp : `lsst.afw.image.exposure.Exposure`
         A copy of the input exposure, rotated by nDegrees
     """
-    nDegrees += 180  # rotations of zero give a 180 degree rotation for some reason
     nDegrees = nDegrees % 360
 
     if not logger:
@@ -275,17 +274,12 @@ def rotateExposure(exp, nDegrees, kernelName='lanczos4', logger=None):
         logger.info('Remove this workaround after DM-20258')
         exp = afwImage.ExposureF(exp, deep=True)
 
-    detector = exp.getDetector()
-    pixelScale = wcs.getPixelScale().asDegrees()
-    crval = wcs.getSkyOrigin()
-    rotAngle = geom.Angle(nDegrees, geom.degrees)
-    cd = (geom.LinearTransform.makeScaling(pixelScale)
-          * geom.LinearTransform.makeRotation(rotAngle))
-    crpix = detector.transform(geom.Point2D(0, 0), FOCAL_PLANE, PIXELS)
-    rotatedWcs = afwGeom.makeSkyWcs(crpix=crpix, crval=crval, cdMatrix=cd.getMatrix())
+    affineRotTransform = geom.AffineTransform.makeRotation(nDegrees*geom.degrees)
+    transformP2toP2 = afwGeom.makeTransform(affineRotTransform)
+    rotatedWcs = afwGeom.makeModifiedWcs(transformP2toP2, wcs, False)
 
     rotatedExp = warper.warpExposure(rotatedWcs, exp)
-    rotatedExp.setXY0(geom.Point2I(0, 0))
+    # rotatedExp.setXY0(geom.Point2I(0, 0))  # TODO: check this is no longer required
     return rotatedExp
 
 
