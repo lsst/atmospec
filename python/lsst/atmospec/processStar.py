@@ -191,7 +191,7 @@ class ProcessStarTaskConfig(pexConfig.Config):
         doc="Set debug mode for Spectractor",
         default=False
     )
-    spectractorDebugLogging = pexConfig.Field(
+    spectractorDebugLogging = pexConfig.Field(  # TODO: tie this to the task debug level?
         dtype=bool,
         doc="Set debug logging for Spectractor",
         default=False
