@@ -52,7 +52,6 @@ COMMISSIONING = False  # allows illegal things for on the mountain usage.
 # remove dummy image totally
 # talk to Jeremy about turning the image beforehand and giving new coords
 # deal with not having ambient temp
-# fix astrometry failing
 # Gen3ification
 # astropy warning for units on save
 # but actually just remove all manual saves entirely, I think?
