@@ -298,7 +298,7 @@ class SpectractorShim():
         airmass = vi.getBoresightAirmass()
         spectrum.adr_params = [dec, hourAngle, temperature, pressure, humidity, airmass]
 
-    def run(self, exp, xpos, ypos, target, outputRoot, expId, binning=1, plotting=True):
+    def run(self, exp, xpos, ypos, target, outputRoot, expId, plotting=True):
         # run option kwargs in the original code, seems to ~always be True
         atmospheric_lines = True
 
@@ -338,7 +338,8 @@ class SpectractorShim():
         #     self.displayImage(image, centroid=(xpos, ypos))
 
         # Use fast mode
-        if binning > 1:
+        if parameters.CCD_REBIN > 1:
+            self.log.info(f'Rebinning image with rebin of {parameters.CCD_REBIN}')
             # TODO: Fix bug here where the passed parameter isn't used!
             image.target_guess = (xpos, ypos)
             image = set_fast_mode(image)
