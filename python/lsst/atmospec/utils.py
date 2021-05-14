@@ -27,7 +27,7 @@ import lsst.afw.image as afwImage
 import lsst.log as lsstLog
 import lsst.afw.geom as afwGeom
 import lsst.geom as geom
-from lsst.afw.cameraGeom import PIXELS, FOCAL_PLANE
+# from lsst.afw.cameraGeom import PIXELS, FOCAL_PLANE  XXX remove if unneeded
 from lsst.obs.lsst.translators.lsst import FILTER_DELIMITER
 
 import astropy
@@ -279,7 +279,7 @@ def rotateExposure(exp, nDegrees, kernelName='lanczos4', logger=None):
     rotatedWcs = afwGeom.makeModifiedWcs(transformP2toP2, wcs, False)
 
     rotatedExp = warper.warpExposure(rotatedWcs, exp)
-    # rotatedExp.setXY0(geom.Point2I(0, 0))  # TODO: check this is no longer required
+    # rotatedExp.setXY0(geom.Point2I(0, 0))  # TODO: check no longer required
     return rotatedExp
 
 

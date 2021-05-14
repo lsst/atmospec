@@ -144,6 +144,18 @@ class SpectractorShim():
         file_name = '/home/mfl/lsst/Spectractor/tests/data/auxtel_first_light-1.fits'
         image = Image(file_name=file_name, target_label=target_label, disperser_label=disperser_label)
 
+        vi = exp.getInfo().getVisitInfo()
+        rotAngle = vi.getBoresightRotAngle().asDegrees()
+        # line below correct if not rotating 90 XXX remove this once resolved
+        # parameters.OBS_CAMERA_ROTATION = 180 - (rotAngle % 360)
+        parameters.OBS_CAMERA_ROTATION = 90 - (rotAngle % 360)
+
+        radec = vi.getBoresightRaDec()
+        image.ra = asCoords.Angle(radec.getRa().asDegrees(), unit="deg")
+        image.dec = asCoords.Angle(radec.getDec().asDegrees(), unit="deg")
+        ha = vi.getBoresightHourAngle().asDegrees()
+        image.hour_angle = asCoords.Angle(ha, unit="deg")
+
         image.data = self._getImageData(exp)
         self._setReadNoiseFromExp(image, exp, 1)
         # xxx remove hard coding of 1 below!
@@ -161,6 +173,9 @@ class SpectractorShim():
 
         image.disperser = Hologram(disperser_label, D=parameters.DISTANCE2CCD,
                                    data_dir=parameters.DISPERSER_DIR, verbose=parameters.VERBOSE)
+
+        image.compute_parallactic_angle()
+
         return image
 
     @staticmethod
@@ -206,7 +221,8 @@ class SpectractorShim():
 
     def _getImageData(self, exp):
         if self.TRANSPOSE:
-            return exp.maskedImage.image.array.T[:, ::-1]
+            # return exp.maskedImage.image.array.T[:, ::-1]
+            return np.rot90(exp.maskedImage.image.array, 1)
         return exp.maskedImage.image.array
 
     def _setReadNoiseFromExp(self, spectractorImage, exp, constValue=None):
@@ -258,10 +274,15 @@ class SpectractorShim():
 
     @staticmethod
     def transposeCentroid(dmXpos, dmYpos, image):
+        # xSize, ySize = image.data.shape
+        # newX = dmXpos
+        # newY = ySize - dmYpos  # image is also flipped in Y
+        # return newY, newX
+
         xSize, ySize = image.data.shape
-        newX = dmXpos
-        newY = ySize - dmYpos  # image is also flipped in Y
-        return newY, newX
+        newX = dmYpos
+        newY = xSize - dmXpos
+        return newX, newY
 
     def displayImage(self, image, centroid=None):
         import lsst.afw.image as afwImage
@@ -323,6 +344,7 @@ class SpectractorShim():
 
         filt, disperser = self._getFilterAndDisperserFromExp(exp)
         image = self.spectractorImageFromLsstExposure(exp, target_label=target, disperser_label=disperser)
+
         if self.TRANSPOSE:
             xpos, ypos = self.transposeCentroid(xpos, ypos, image)
 
