@@ -140,9 +140,7 @@ class SpectractorShim():
         object in place where possible. Where this is not possible the methods
         are labeled _setSomething().
         """
-        # XXX This REALLY needs removing
-        file_name = '/home/mfl/lsst/Spectractor/tests/data/auxtel_first_light-1.fits'
-        image = Image(file_name=file_name, target_label=target_label, disperser_label=disperser_label)
+        image = Image(file_name='', target_label=target_label, disperser_label=disperser_label)
 
         vi = exp.getInfo().getVisitInfo()
         rotAngle = vi.getBoresightRotAngle().asDegrees()
