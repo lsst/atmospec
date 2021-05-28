@@ -39,6 +39,7 @@ from spectractor.extractor.extractor import (set_fast_mode, FullForwardModelFitW
 from spectractor.extractor.spectrum import Spectrum, calibrate_spectrum  # noqa: E402
 
 import lsst.log as lsstLog  # noqa: E402
+from lsst.obs.lsst.translators.lsst import FILTER_DELIMITER
 
 
 class SpectractorShim():
@@ -132,7 +133,7 @@ class SpectractorShim():
             if not item.startswith("__"):
                 print(item, getattr(parameters, item))
 
-    def spectractorImageFromLsstExposure(self, exp, target_label='', disperser_label=''):
+    def spectractorImageFromLsstExposure(self, exp, *, target_label='', disperser_label='', filter_label=''):
         """Construct a Spectractor Image object from LSST objects.
 
         Internally we try to use functions that calculate things and return
@@ -140,7 +141,8 @@ class SpectractorShim():
         object in place where possible. Where this is not possible the methods
         are labeled _setSomething().
         """
-        image = Image(file_name='', target_label=target_label, disperser_label=disperser_label)
+        image = Image(file_name='', target_label=target_label, disperser_label=disperser_label,
+                      filter_label=filter_label)
 
         vi = exp.getInfo().getVisitInfo()
         rotAngle = vi.getBoresightRotAngle().asDegrees()
@@ -178,15 +180,13 @@ class SpectractorShim():
 
     @staticmethod
     def _getFilterAndDisperserFromExp(exp):
-        # TODO: import the delimiter from obs_package
-        filterName = exp.getFilter().getName()
-        if len(filterName.split('~')) == 1:
-            filt1 = filterName
-            filt2 = exp.getInfo().getMetadata()['GRATING']
+        filterFullName = exp.getFilterLabel().physicalLabel
+        if FILTER_DELIMITER not in filterFullName:
+            filt = filterFullName
+            grating = exp.getInfo().getMetadata()['GRATING']
         else:
-            filt1, filt2 = filterName.split('~')
-
-        return filt1, filt2
+            filt, grating = filterFullName.split(FILTER_DELIMITER)
+        return filt, grating
 
     def _setImageAndHeaderInfo(self, image, exp, useVisitInfo=False):
         # currently set in spectractor.tools.extract_info_from_CTIO_header()
@@ -340,8 +340,9 @@ class SpectractorShim():
         xpos = int(np.round(xpos))
         ypos = int(np.round(ypos))
 
-        filt, disperser = self._getFilterAndDisperserFromExp(exp)
-        image = self.spectractorImageFromLsstExposure(exp, target_label=target, disperser_label=disperser)
+        filter_label, disperser = self._getFilterAndDisperserFromExp(exp)
+        image = self.spectractorImageFromLsstExposure(exp, target_label=target, disperser_label=disperser,
+                                                      filter_label=filter_label)
 
         if self.TRANSPOSE:
             xpos, ypos = self.transposeCentroid(xpos, ypos, image)
