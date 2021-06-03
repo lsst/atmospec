@@ -39,7 +39,7 @@ from spectractor.extractor.extractor import (set_fast_mode, FullForwardModelFitW
 from spectractor.extractor.spectrum import Spectrum, calibrate_spectrum  # noqa: E402
 
 import lsst.log as lsstLog  # noqa: E402
-from lsst.obs.lsst.translators.lsst import FILTER_DELIMITER
+from lsst.obs.lsst.translators.lsst import FILTER_DELIMITER  # noqa: E402
 
 
 class SpectractorShim():
