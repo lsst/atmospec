@@ -680,7 +680,7 @@ class ProcessStarTask(pipeBase.CmdLineTask):
                                           paramOverrides=overrideDict,
                                           supplementaryParameters=supplementDict,
                                           resetParameters=resetParameters)
-            result = spectractor.run(exp, *sourceCentroid, target, spectractorOutputRoot, expId)
+            result = spectractor.run(exp, *sourceCentroid, target, spectractorOutputRoot)
         else:
             try:  # need a try here so that the context manager always exits cleanly so plots always written
                 with PdfPages(pdfPath) as pdf:  # TODO: Doesn't the try need to be inside the with?!
@@ -690,7 +690,7 @@ class ProcessStarTask(pipeBase.CmdLineTask):
                                                   supplementaryParameters=supplementDict,
                                                   resetParameters=resetParameters)
 
-                    result = spectractor.run(exp, *sourceCentroid, target, spectractorOutputRoot, expId)
+                    result = spectractor.run(exp, *sourceCentroid, target, spectractorOutputRoot)
             except Exception as e:
                 self.log.warn(f"Caught exception {e}, passing here so pdf can be written to {pdfPath}")
                 result = None
