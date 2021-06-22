@@ -1,0 +1,24 @@
+description: atmospec ProcessStarTask definition.
+tasks:
+  isr:
+    class: lsst.ip.isr.IsrTask
+    config:
+      # characterize performance when turning on darks as first attempt found it
+      # to degrade performance (possibly due to bad darks, but take care here)
+      doDark: False
+      doFlat: False
+      doFringe: False
+      doDefect: True
+      doLinearize: False
+      doCrosstalk: False
+      doSaturationInterpolation: False
+      overscan.fitType: 'MEDIAN_PER_ROW'
+  characterizeImage:
+    class: lsst.pipe.tasks.characterizeImage.CharacterizeImageTask
+    config:
+      doApCorr: False
+      doMeasurePsf: False
+      measurePsf.starSelector['objectSize'].signalToNoiseMin: 10.0
+      measurePsf.starSelector['objectSize'].fluxMin: 5000.0
+      detection.includeThresholdMultiplier: 3
+      # assess carefully whether turning on cosmic ray repair hurts performance
