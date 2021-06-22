@@ -36,6 +36,8 @@ import lsst.geom as geom
 from lsst.ip.isr import IsrTask
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
+import lsst.pipe.base.connectionTypes as cT
+
 from lsst.utils import getPackageDir
 from lsst.pipe.tasks.characterizeImage import CharacterizeImageTask
 from lsst.meas.algorithms import LoadIndexedReferenceObjectsTask, MagnitudeLimit
@@ -60,6 +62,33 @@ COMMISSIONING = False  # allows illegal things for on the mountain usage.
 # Move to QFM for star finding failover case
 # Remove old cruft functions
 # change spectractions run method to be ~all kwargs with *,...
+
+
+class ProcessStarTaskConnections(pipeBase.PipelineTaskConnections,
+                                 dimensions=("instrument", "exposure", "detector")):
+    inputExp = cT.Input(
+        name="icExp",
+        doc="Image-characterize output exposure",
+        storageClass="Exposure",
+        dimensions=("instrument", "exposure", "detector"),
+        multiple=False,
+    )
+    inputCentroid = cT.Input(
+        name="atmospecCentroid",
+        doc="The main star centroid in yaml format.",
+        storageClass="StructuredDataDict",
+        dimensions=("instrument", "exposure", "detector"),
+        multiple=False,
+    )
+    outputSpectraction = cT.Output(
+        name="spectractorOutput",
+        doc="The Spectractor output structure.",
+        storageClass="StructuredDataDict",
+        dimensions=("instrument", "exposure", "detector"),
+    )
+
+    def __init__(self, *, config=None):
+        super().__init__(config=config)
 
 
 class ProcessStarTaskConfig(pexConfig.Config):
