@@ -36,24 +36,24 @@ __all__ = ['SingleStarCentroidTaskConfig', 'SingleStarCentroidTask']
 
 
 class SingleStarCentroidTaskConnections(pipeBase.PipelineTaskConnections,
-                                        dimensions=("instrument", "exposure", "detector")):
+                                        dimensions=("instrument", "visit", "detector")):
     inputExp = cT.Input(
         name="icExp",
         doc="Image-characterize output exposure",
-        storageClass="Exposure",
-        dimensions=("instrument", "exposure", "detector"),
+        storageClass="ExposureF",
+        dimensions=("instrument", "visit", "detector"),
         multiple=False,
     )
     inputSources = cT.Input(
         name="icSrc",
         doc="Image-characterize output sources.",
-        storageClass="Exposure",
-        dimensions=("instrument", "exposure", "detector"),
+        storageClass="SourceCatalog",
+        dimensions=("instrument", "visit", "detector"),
         multiple=False,
     )
     astromRefCat = cT.PrerequisiteInput(
         doc="Reference catalog to use for astrometry",
-        name="cal_ref_cat",
+        name="gaia_dr2_20200414",
         storageClass="SimpleCatalog",
         dimensions=("skypix",),
         deferLoad=True,
@@ -63,7 +63,7 @@ class SingleStarCentroidTaskConnections(pipeBase.PipelineTaskConnections,
         name="atmospecCentroid",
         doc="The main star centroid in yaml format.",
         storageClass="StructuredDataDict",
-        dimensions=("instrument", "exposure", "detector"),
+        dimensions=("instrument", "visit", "detector"),
     )
 
 
