@@ -28,6 +28,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 from importlib import reload
+import time
 
 import lsstDebug
 import lsst.afw.image as afwImage
@@ -448,6 +449,7 @@ class ProcessStarTask(pipeBase.CmdLineTask):
         dataRef : `daf.persistence.butlerSubset.ButlerDataRef`
             Butler reference of the detector and exposure ID
         """
+        t0 = time.time()
         butler = dataRef.getButler()
         dataId = dataRef.dataId
         self.log.info("Processing %s" % (dataRef.dataId))
@@ -519,7 +521,8 @@ class ProcessStarTask(pipeBase.CmdLineTask):
         self.makeResultPickleable(result)
         butler.put(result, 'spectraction', dataId)
 
-        self.log.info(f'Successfully ran to completion for {dataId}')
+        t1 = time.time() - t0
+        self.log.info(f'Successfully ran to completion in {t1:.1f}s for {dataId}')
 
         return result
 
@@ -680,7 +683,7 @@ class ProcessStarTask(pipeBase.CmdLineTask):
             result = spectractor.run(exp, *sourceCentroid, target, spectractorOutputRoot, expId)
         else:
             try:  # need a try here so that the context manager always exits cleanly so plots always written
-                with PdfPages(pdfPath) as pdf:
+                with PdfPages(pdfPath) as pdf:  # TODO: Doesn't the try need to be inside the with?!
                     resetParameters['PdfPages'] = pdf
                     spectractor = SpectractorShim(configFile=configFilename,
                                                   paramOverrides=overrideDict,
