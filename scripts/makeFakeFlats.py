@@ -19,7 +19,8 @@ from astropy.io import fits
 #             'C16': 1,
 #             'C17': 1}
 
-# data from https://lsst-camera.slac.stanford.edu/DataPortal/RawReport.jsp?run=74
+# data from
+# https://lsst-camera.slac.stanford.edu/DataPortal/RawReport.jsp?run=74
 gainDict = {'C00': 2.4837722778320312,
             'C01': 2.4612927436828613,
             'C02': 2.4486501216888428,

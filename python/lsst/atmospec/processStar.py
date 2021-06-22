@@ -28,19 +28,12 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 from importlib import reload
-
-import astropy
-from astroquery.simbad import Simbad
-from astroquery.vizier import Vizier
-import astropy.units as u
-from astropy.coordinates import SkyCoord, Distance
+import time
 
 import lsstDebug
 import lsst.afw.image as afwImage
-from lsst.afw.image.utils import defineFilter
 import lsst.geom as geom
 from lsst.ip.isr import IsrTask
-import lsst.log as lsstLog
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
 from lsst.utils import getPackageDir
@@ -49,153 +42,24 @@ from lsst.meas.algorithms import LoadIndexedReferenceObjectsTask, MagnitudeLimit
 from lsst.meas.astrom import AstrometryTask, FitAffineWcsTask
 
 import lsst.afw.detection as afwDetect
-import lsst.afw.geom as afwGeom
 
 from .spectraction import SpectractorShim
+from .utils import getTargetCentroidFromWcs
 
 COMMISSIONING = False  # allows illegal things for on the mountain usage.
 
-
-def getTargetCentroidFromWcs(exp, target, doMotionCorrection=True, logger=None):
-    """Get the target's centroid, given an exposure with fitted WCS.
-
-    Parameters
-    ----------
-    exp : `lsst.afw.exposure.Exposure`
-        Exposure with fitted WCS.
-
-    target : `str`
-        The name of the target, e.g. 'HD 55852'
-
-    doMotionCorrection : `bool`, optional
-        Correct for proper motion and parallax if possible.
-        This requires the object is found in Vizier rather than Simbad.
-        If that is not possible, a warning is logged, and the uncorrected
-        centroid is returned.
-
-    Returns
-    -------
-    pixCoord : `tuple` of `float`, or `None`
-        The pixel (x, y) of the target's centroid, or None if the object
-        is not found.
-    """
-    if logger is None:
-        logger = lsstLog.Log.getDefaultLogger()
-
-    resultFrom = None
-    targetLocation = None
-    # try vizier, but it is slow, unreliable, and
-    # many objects are found but have no Hipparcos entries
-    try:
-        targetLocation = vizierLocationForTarget(exp, target, doMotionCorrection=doMotionCorrection)
-        resultFrom = 'vizier'
-        logger.info(f"Target location for {target} retrieved from Vizier")
-
-    # fail over to simbad - it has ~every target, but no proper motions
-    except ValueError:
-        try:
-            logger.warn(f"Target {target} not found in Vizier, failing over to try Simbad")
-            targetLocation = simbadLocationForTarget(target)
-            resultFrom = 'simbad'
-            logger.info(f"Target location for {target} retrieved from Simbad")
-        except ValueError as inst:  # simbad found zero or several results for target
-            msg = inst.args[0]
-            logger.warn(msg)
-            return None
-
-    if not targetLocation:
-        return None
-
-    if doMotionCorrection and resultFrom == 'simbad':
-        logger.warn(f"Failed to apply motion correction because {target} was"
-                    " only found in Simbad, not Vizier/Hipparcos")
-
-    pixCoord = exp.getWcs().skyToPixel(targetLocation)
-    return pixCoord
-
-
-def simbadLocationForTarget(target):
-    """Get the target location from Simbad.
-
-    Parameters
-    ----------
-    target : `str`
-        The name of the target, e.g. 'HD 55852'
-
-    Returns
-    -------
-    targetLocation : `lsst.geom.SpherePoint`
-        Nominal location of the target object, uncorrected for
-        proper motion and parallax.
-
-    Raises
-    ------
-    ValueError
-        If object not found, or if multiple entries for the object are found.
-    """
-    obj = Simbad.query_object(target)
-    if not obj:
-        raise ValueError(f"Found failed to find {target} in simbad!")
-    if len(obj) != 1:
-        raise ValueError(f"Found {len(obj)} simbad entries for {target}!")
-
-    raStr = obj[0]['RA']
-    decStr = obj[0]['DEC']
-    skyLocation = SkyCoord(raStr, decStr, unit=(u.hourangle, u.degree), frame='icrs')
-    raRad, decRad = skyLocation.ra.rad, skyLocation.dec.rad
-    ra = geom.Angle(raRad)
-    dec = geom.Angle(decRad)
-    targetLocation = geom.SpherePoint(ra, dec)
-    return targetLocation
-
-
-def vizierLocationForTarget(exp, target, doMotionCorrection):
-    """Get the target location from Vizier optionally correction motion.
-
-    Parameters
-    ----------
-    target : `str`
-        The name of the target, e.g. 'HD 55852'
-
-    Returns
-    -------
-    targetLocation : `lsst.geom.SpherePoint` or `None`
-        Location of the target object, optionally corrected for
-        proper motion and parallax.
-
-    Raises
-    ------
-    ValueError
-        If object not found in Hipparcos2 via Vizier.
-        This is quite common, even for bright objects.
-    """
-
-    result = Vizier.query_object(target)  # result is an empty table list for an unknown target
-    try:
-        star = result['I/311/hip2']
-    except TypeError:  # if 'I/311/hip2' not in result (result doesn't allow easy checking without a try)
-        raise ValueError
-
-    epoch = "J1991.25"
-    coord = SkyCoord(ra=star[0]['RArad']*u.Unit(star['RArad'].unit),
-                     dec=star[0]['DErad']*u.Unit(star['DErad'].unit),
-                     obstime=epoch,
-                     pm_ra_cosdec=star[0]['pmRA']*u.Unit(star['pmRA'].unit),  # NB contains cosdec already
-                     pm_dec=star[0]['pmDE']*u.Unit(star['pmDE'].unit),
-                     distance=Distance(parallax=star[0]['Plx']*u.Unit(star['Plx'].unit)))
-
-    if doMotionCorrection:
-        expDate = exp.getInfo().getVisitInfo().getDate()
-        obsTime = astropy.time.Time(expDate.get(expDate.EPOCH), format='jyear', scale='tai')
-        newCoord = coord.apply_space_motion(new_obstime=obsTime)
-    else:
-        newCoord = coord
-
-    raRad, decRad = newCoord.ra.rad, newCoord.dec.rad
-    ra = geom.Angle(raRad)
-    dec = geom.Angle(decRad)
-    targetLocation = geom.SpherePoint(ra, dec)
-    return targetLocation
+# TODO:
+# Sort out read noise and gain
+# remove dummy image totally
+# talk to Jeremy about turning the image beforehand and giving new coords
+# deal with not having ambient temp
+# Gen3ification
+# astropy warning for units on save
+# but actually just remove all manual saves entirely, I think?
+# Make SED persistable
+# Move to QFM for star finding failover case
+# Remove old cruft functions
+# change spectractions run method to be ~all kwargs with *,...
 
 
 class ProcessStarTaskConfig(pexConfig.Config):
@@ -297,6 +161,11 @@ class ProcessStarTaskConfig(pexConfig.Config):
             "both": "Use both spectra",
         }
     )
+    binning = pexConfig.Field(
+        dtype=int,
+        doc="Bin the input image by this factor",
+        default=4
+    )
     doFlat = pexConfig.Field(
         dtype=bool,
         doc="Flatfield the image?",
@@ -306,6 +175,26 @@ class ProcessStarTaskConfig(pexConfig.Config):
         dtype=bool,
         doc="Repair cosmic rays?",
         default=True
+    )
+    doDisplayPlots = pexConfig.Field(
+        dtype=bool,
+        doc="Matplotlib show() the plots, so they show up in a notebook or X window",
+        default=False
+    )
+    doSavePlots = pexConfig.Field(
+        dtype=bool,
+        doc="Save matplotlib plots to output rerun?",
+        default=False
+    )
+    spectractorDebugMode = pexConfig.Field(
+        dtype=bool,
+        doc="Set debug mode for Spectractor",
+        default=False
+    )
+    spectractorDebugLogging = pexConfig.Field(  # TODO: tie this to the task debug level?
+        dtype=bool,
+        doc="Set debug logging for Spectractor",
+        default=False
     )
     forceObjectName = pexConfig.Field(
         dtype=str,
@@ -326,9 +215,9 @@ class ProcessStarTaskConfig(pexConfig.Config):
 
         self.charImage.doApCorr = False
         self.charImage.doMeasurePsf = False
-        # if self.charImage.doMeasurePsf:
-        #     self.charImage.measurePsf.starSelector['objectSize'].signalToNoiseMin = 10.0
-        #     self.charImage.measurePsf.starSelector['objectSize'].fluxMin = 5000.0
+        if self.charImage.doMeasurePsf:
+            self.charImage.measurePsf.starSelector['objectSize'].signalToNoiseMin = 10.0
+            self.charImage.measurePsf.starSelector['objectSize'].fluxMin = 5000.0
         self.charImage.detection.includeThresholdMultiplier = 3
         self.isr.overscan.fitType = 'MEDIAN_PER_ROW'
 
@@ -510,6 +399,7 @@ class ProcessStarTask(pipeBase.CmdLineTask):
         config.mainStarFluxCut
         config.mainStarRoundnessCut
         """
+        # TODO: probably replace all this with QFM
         fpSet = self.findObjects(exp)
         if self.config.mainSourceFindingMethod == 'ROUNDEST':
             source = self.getRoundestObject(fpSet, exp, fluxCut=self.config.mainStarFluxCut)
@@ -518,8 +408,8 @@ class ProcessStarTask(pipeBase.CmdLineTask):
                                              roundnessCut=self.config.mainStarRoundnessCut)
         else:
             # should be impossible as this is a choice field, but still
-            raise RuntimeError(f"Invalid source finding method"
-                               "selected: {self.config.mainSourceFindingMethod}")
+            raise RuntimeError("Invalid source finding method "
+                               f"selected: {self.config.mainSourceFindingMethod}")
         return source.getCentroid()
 
     def updateMetadata(self, exp, **kwargs):
@@ -559,6 +449,7 @@ class ProcessStarTask(pipeBase.CmdLineTask):
         dataRef : `daf.persistence.butlerSubset.ButlerDataRef`
             Butler reference of the detector and exposure ID
         """
+        t0 = time.time()
         butler = dataRef.getButler()
         dataId = dataRef.dataId
         self.log.info("Processing %s" % (dataRef.dataId))
@@ -603,7 +494,7 @@ class ProcessStarTask(pipeBase.CmdLineTask):
                 sourceCentroid = getTargetCentroidFromWcs(exposure, target, logger=self.log)
             else:
                 sourceCentroid = self.findMainSource(exposure)
-                self.log.warn(f"Astrometric fit failed, failing over to source-finding centroid")
+                self.log.warn("Astrometric fit failed, failing over to source-finding centroid")
                 self.log.info(f"Centroid of main star at: {sourceCentroid!r}")
 
             self.updateMetadata(exposure, centroid=sourceCentroid)
@@ -623,10 +514,30 @@ class ProcessStarTask(pipeBase.CmdLineTask):
                 raise RuntimeError(f"Failed to create output dir {outputRoot}")
         expId = dataRef.dataId['expId']
 
-        ret = self.run(exposure, outputRoot, expId, sourceCentroid)
+        result = self.run(exposure, outputRoot, expId, sourceCentroid)
         self.log.info("Finished processing %s" % (dataRef.dataId))
 
-        return ret
+        result.dataId = dataId
+        self.makeResultPickleable(result)
+        butler.put(result, 'spectraction', dataId)
+
+        t1 = time.time() - t0
+        self.log.info(f'Successfully ran to completion in {t1:.1f}s for {dataId}')
+
+        return result
+
+    def makeResultPickleable(self, result):
+        """Remove unpicklable components from the output"""
+        result.image.target.build_sed = None
+        result.spectrum.target.build_sed = None
+        result.image.target.sed = None
+        result.spectrum.disperser.load_files = None
+        result.image.disperser.load_files = None
+
+        result.spectrum.disperser.N_fit = None
+        result.spectrum.disperser.N_interp = None
+        result.spectrum.disperser.ratio_order_2over1 = None
+        result.spectrum.disperser.theta = None
 
     def runAstrometry(self, butler, exp, icSrc):
         refObjLoaderConfig = LoadIndexedReferenceObjectsTask.ConfigClass()
@@ -649,16 +560,16 @@ class ProcessStarTask(pipeBase.CmdLineTask):
 
         # TODO: Change this to doing this the proper way
         referenceFilterName = self.config.referenceFilterOverride
-        defineFilter(referenceFilterName, 656.28)
-        referenceFilter = afwImage.filter.Filter(referenceFilterName)
-        originalFilter = exp.getFilter()  # there's a better way of doing this with the task itself I think
-        exp.setFilter(referenceFilter)
+        referenceFilterLabel = afwImage.FilterLabel(physical=referenceFilterName, band=referenceFilterName)
+        originalFilterLabel = exp.getFilterLabel()  # there's a better way of doing this with the task I think
+        exp.setFilterLabel(referenceFilterLabel)
 
         try:
             astromResult = solver.run(sourceCat=icSrc, exposure=exp)
-            exp.setFilter(originalFilter)
+            exp.setFilterLabel(originalFilterLabel)
         except Exception:
             self.log.warn("Solver failed to run completely")
+            exp.setFilterLabel(originalFilterLabel)
             return None
 
         scatter = astromResult.scatterOnSky.asArcseconds()
@@ -721,44 +632,69 @@ class ProcessStarTask(pipeBase.CmdLineTask):
         reload(plt)  # reset matplotlib color cycles when multiprocessing
         pdfPath = os.path.join(spectractorOutputRoot, 'plots.pdf')
         starNames = self.loadStarNames()
-        with PdfPages(pdfPath) as pdf:
-            if True:
-                overrideDict = {'SAVE': True,
-                                'OBS_NAME': 'AUXTEL',
-                                'DEBUG': True,
-                                'DISPLAY': False,
-                                'VERBOSE': True,
-                                # 'CCD_IMSIZE': 4000}
-                                }
-                supplementDict = {'CALLING_CODE': 'LSST_DM',
-                                  'STAR_NAMES': starNames}
-                resetParameters = {'PdfPages': pdf,  # anything that changes between dataRefs!
-                                   'LSST_SAVEFIGPATH': spectractorOutputRoot}
-            else:
-                overrideDict = {}
-                supplementDict = {}
 
-            overrideDict['DISTANCE2CCD'] = 175  # TODO: change to a calculation based on LINPOS
+        if True:
+            overrideDict = {'SAVE': False,
+                            'OBS_NAME': 'AUXTEL',
+                            'DEBUG': self.config.spectractorDebugMode,
+                            'DEBUG_LOGGING': self.config.spectractorDebugLogging,
+                            'DISPLAY': self.config.doDisplayPlots,
+                            'CCD_REBIN': self.config.binning,
+                            'VERBOSE': 0,
+                            # 'CCD_IMSIZE': 4000}
+                            }
+            supplementDict = {'CALLING_CODE': 'LSST_DM',
+                              'STAR_NAMES': starNames}
 
-            # Note - flow is that the config file is loaded, then overrides are
-            # applied, then supplements are set.
-            configFilename = '/home/mfl/lsst/Spectractor/config/auxtel.ini'
+            # anything that changes between dataRefs!
+            resetParameters = {}
+            if self.config.doSavePlots:
+                resetParameters['LSST_SAVEFIGPATH'] = spectractorOutputRoot
+        else:
+            overrideDict = {}
+            supplementDict = {}
+
+        # TODO: think if this is the right place for this
+        # probably wants to go in spectraction.py really
+        md = exp.getMetadata()
+        linearStagePosition = 115  # this seems to be the rough zero-point for some reason
+        if 'LINSPOS' in md:
+            position = md['LINSPOS']  # linear stage position in mm from CCD, larger->further from CCD
+            if position is not None:
+                linearStagePosition += position
+        overrideDict['DISTANCE2CCD'] = linearStagePosition
+
+        target = exp.getMetadata()['OBJECT']
+        if self.config.forceObjectName:
+            self.log.info(f"Forcing target name from {target} to {self.config.forceObjectName}")
+            target = self.config.forceObjectName
+
+        if target in ['FlatField position', 'Park position', 'Test', 'NOTSET']:
+            raise ValueError(f"OBJECT set to {target} - this is not a celestial object!")
+
+        packageDir = getPackageDir('atmospec')
+        configFilename = os.path.join(packageDir, 'config', 'auxtel.ini')
+
+        if self.config.doDisplayPlots:  # no pdfpages backend - isn't compatible with display-as-you-go
             spectractor = SpectractorShim(configFile=configFilename,
                                           paramOverrides=overrideDict,
                                           supplementaryParameters=supplementDict,
                                           resetParameters=resetParameters)
+            result = spectractor.run(exp, *sourceCentroid, target, spectractorOutputRoot, expId)
+        else:
+            try:  # need a try here so that the context manager always exits cleanly so plots always written
+                with PdfPages(pdfPath) as pdf:  # TODO: Doesn't the try need to be inside the with?!
+                    resetParameters['PdfPages'] = pdf
+                    spectractor = SpectractorShim(configFile=configFilename,
+                                                  paramOverrides=overrideDict,
+                                                  supplementaryParameters=supplementDict,
+                                                  resetParameters=resetParameters)
 
-            target = exp.getMetadata()['OBJECT']
-            if self.config.forceObjectName:
-                self.log.warn(f"Forcing target name from {target} to {self.config.forceObjectName}")
-                target = self.config.forceObjectName
-
-            if target in ['FlatField position', 'Park position', 'Test', 'NOTSET']:
-                raise ValueError(f"OBJECT set to {target} - this is not a celestial object!")
-
-            spectractor.run(exp, *sourceCentroid, target, spectractorOutputRoot, expId)
-
-        return
+                    result = spectractor.run(exp, *sourceCentroid, target, spectractorOutputRoot, expId)
+            except Exception as e:
+                self.log.warn(f"Caught exception {e}, passing here so pdf can be written to {pdfPath}")
+                result = None
+        return result
 
     def flatfield(self, exp, disp):
         """Placeholder for wavelength dependent flatfielding: TODO: DM-18141
@@ -812,7 +748,7 @@ class ProcessStarTask(pipeBase.CmdLineTask):
         self.log.debug('(xStart, xEnd) = (%s, %s)'%(xStart, xEnd))
         self.log.debug('(yStart, yEnd) = (%s, %s)'%(yStart, yEnd))
 
-        bbox = afwGeom.Box2I(afwGeom.Point2I(xStart, yStart), afwGeom.Point2I(xEnd, yEnd))
+        bbox = geom.Box2I(geom.Point2I(xStart, yStart), geom.Point2I(xEnd, yEnd))
         return bbox
 
         # def calcRidgeLine(self, footprint):

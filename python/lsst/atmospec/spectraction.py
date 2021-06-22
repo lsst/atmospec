@@ -23,15 +23,23 @@
 
 import os
 import numpy as np
+import astropy.coordinates as asCoords
+from astropy import units as u
 
 from spectractor import parameters
-from spectractor.config import load_config
-from spectractor.extractor.images import Image, find_target, turn_image
-from spectractor.extractor.spectrum import (Spectrum, extract_spectrum_from_image, calibrate_spectrum,
-                                            calibrate_spectrum_with_lines)
-from spectractor.extractor.dispersers import Hologram
+parameters.CALLING_CODE = "LSST_DM"  # this must be set IMMEDIATELY to supress colored logs
 
-import lsst.log as lsstLog
+from spectractor.config import load_config  # noqa: E402
+from spectractor.extractor.images import Image, find_target, turn_image  # noqa: E402
+
+from spectractor.extractor.dispersers import Hologram  # noqa: E402
+from spectractor.extractor.extractor import (set_fast_mode, FullForwardModelFitWorkspace,  # noqa: E402
+                                             plot_comparison_truth, run_ffm_minimisation,  # noqa: E402
+                                             extract_spectrum_from_image)
+from spectractor.extractor.spectrum import Spectrum, calibrate_spectrum  # noqa: E402
+
+import lsst.log as lsstLog  # noqa: E402
+from lsst.obs.lsst.translators.lsst import FILTER_DELIMITER  # noqa: E402
 
 
 class SpectractorShim():
@@ -125,7 +133,7 @@ class SpectractorShim():
             if not item.startswith("__"):
                 print(item, getattr(parameters, item))
 
-    def spectractorImageFromLsstExposure(self, exp, target_label='', disperser_label=''):
+    def spectractorImageFromLsstExposure(self, exp, *, target_label='', disperser_label='', filter_label=''):
         """Construct a Spectractor Image object from LSST objects.
 
         Internally we try to use functions that calculate things and return
@@ -133,8 +141,20 @@ class SpectractorShim():
         object in place where possible. Where this is not possible the methods
         are labeled _setSomething().
         """
-        file_name = '/home/mfl/lsst/Spectractor/tests/data/asdasauxtel_first_light-1.fits'  # xxx REALLY needs removing
-        image = Image(file_name=file_name, target_label=target_label, disperser_label=disperser_label)
+        image = Image(file_name='', target_label=target_label, disperser_label=disperser_label,
+                      filter_label=filter_label)
+
+        vi = exp.getInfo().getVisitInfo()
+        rotAngle = vi.getBoresightRotAngle().asDegrees()
+        # line below correct if not rotating 90 XXX remove this once resolved
+        # parameters.OBS_CAMERA_ROTATION = 180 - (rotAngle % 360)
+        parameters.OBS_CAMERA_ROTATION = 90 - (rotAngle % 360)
+
+        radec = vi.getBoresightRaDec()
+        image.ra = asCoords.Angle(radec.getRa().asDegrees(), unit="deg")
+        image.dec = asCoords.Angle(radec.getDec().asDegrees(), unit="deg")
+        ha = vi.getBoresightHourAngle().asDegrees()
+        image.hour_angle = asCoords.Angle(ha, unit="deg")
 
         image.data = self._getImageData(exp)
         self._setReadNoiseFromExp(image, exp, 1)
@@ -145,7 +165,6 @@ class SpectractorShim():
 
         self._setImageAndHeaderInfo(image, exp)  # sets image attributes
 
-        # image.expo = exp.getInfo().getVisitInfo().getExposureTime()  # set in header setter
         assert image.expo is not None
         assert image.expo != 0
         assert image.expo > 0
@@ -154,20 +173,22 @@ class SpectractorShim():
 
         image.disperser = Hologram(disperser_label, D=parameters.DISTANCE2CCD,
                                    data_dir=parameters.DISPERSER_DIR, verbose=parameters.VERBOSE)
+
+        image.compute_parallactic_angle()
+
         return image
 
     @staticmethod
     def _getFilterAndDisperserFromExp(exp):
-        filterName = exp.getFilter().getName()
-        if len(filterName.split('~')) == 1:
-            filt1 = filterName
-            filt2 = exp.getInfo().getMetadata()['GRATING']
+        filterFullName = exp.getFilterLabel().physicalLabel
+        if FILTER_DELIMITER not in filterFullName:
+            filt = filterFullName
+            grating = exp.getInfo().getMetadata()['GRATING']
         else:
-            filt1, filt2 = filterName.split('~')  # TODO: import the delimiter from obs_package
+            filt, grating = filterFullName.split(FILTER_DELIMITER)
+        return filt, grating
 
-        return filt1, filt2
-
-    def _setImageAndHeaderInfo(self, image, exp, useVisitInfo=False):
+    def _setImageAndHeaderInfo(self, image, exp, useVisitInfo=True):
         # currently set in spectractor.tools.extract_info_from_CTIO_header()
         filt, disperser = self._getFilterAndDisperserFromExp(exp)
 
@@ -185,10 +206,12 @@ class SpectractorShim():
             if useVisitInfo:
                 vi = exp.getInfo().getVisitInfo()
                 image.header.airmass = vi.getBoresightAirmass()  # currently returns nan for obs_ctio0m9
+                image.airmass = vi.getBoresightAirmass()  # currently returns nan for obs_ctio0m9
 
             else:
                 md = exp.getMetadata().toDict()
                 image.header.airmass = md['AIRMASS']
+                image.airmass = md['AIRMASS']
                 image.date_obs = md['DATE']
         except Exception:
             self.log.warn("Failed to set AIRMASS, default value of 1 used")
@@ -198,7 +221,8 @@ class SpectractorShim():
 
     def _getImageData(self, exp):
         if self.TRANSPOSE:
-            return exp.maskedImage.image.array.T[:, ::-1]
+            # return exp.maskedImage.image.array.T[:, ::-1]
+            return np.rot90(exp.maskedImage.image.array, 1)
         return exp.maskedImage.image.array
 
     def _setReadNoiseFromExp(self, spectractorImage, exp, constValue=None):
@@ -206,9 +230,9 @@ class SpectractorShim():
         if constValue is not None:
             spectractorImage.read_out_noise = np.ones_like(spectractorImage.data) * constValue
         else:
+            # TODO: Check with Jeremy if we want the raw read noise
+            # or the per-pixel variance. Either is doable, just need to know.
             raise NotImplementedError("Setting noise image from exp variance not implemented")
-            # spectractorImage.read_out_noise = np.ones_like(spectractorImage.data)
-            # spectractorImage.read_out_noise = exp.variance.array
 
     def _setReadNoiseToNone(self, spectractorImage):
         spectractorImage.read_out_noise = None
@@ -250,10 +274,15 @@ class SpectractorShim():
 
     @staticmethod
     def transposeCentroid(dmXpos, dmYpos, image):
+        # xSize, ySize = image.data.shape
+        # newX = dmXpos
+        # newY = ySize - dmYpos  # image is also flipped in Y
+        # return newY, newX
+
         xSize, ySize = image.data.shape
-        newX = dmXpos
-        newY = ySize - dmYpos  # image is also flipped in Y
-        return newY, newX
+        newX = dmYpos
+        newY = xSize - dmXpos
+        return newX, newY
 
     def displayImage(self, image, centroid=None):
         import lsst.afw.image as afwImage
@@ -267,25 +296,56 @@ class SpectractorShim():
         if centroid:
             disp1.dot('x', centroid[0], centroid[1], size=100)
 
-    def run(self, exp, xpos, ypos, target, outputRoot, expId):
+    def setAdrParameters(self, spectrum, exp):
+        # The adr_params parameter format expected by spectractor are:
+        # [dec, hour_angle, temperature, pressure, humidity, airmass]
+        vi = exp.getInfo().getVisitInfo()
 
-        # run option kwargs in the original code - do something with these
+        raDec = vi.getBoresightRaDec()
+        dec = raDec.getDec()
+        dec = asCoords.Angle(dec.asDegrees(), unit=u.deg)
+
+        hourAngle = vi.getBoresightHourAngle()
+        hourAngle = asCoords.Angle(hourAngle.asDegrees(), unit=u.deg)
+
+        weather = vi.getWeather()
+        _temperature = weather.getAirTemperature()
+        temperature = _temperature if not np.isnan(_temperature) else 10  # maybe average?
+        _pressure = weather.getAirPressure()
+        pressure = _pressure if not np.isnan(_pressure) else 732  # nominal for altitude?
+        _humidity = weather.getHumidity()
+        humidity = _humidity if not np.isnan(_humidity) else None  # not a required param so no default
+
+        airmass = vi.getBoresightAirmass()
+        spectrum.adr_params = [dec, hourAngle, temperature, pressure, humidity, airmass]
+
+    def run(self, exp, xpos, ypos, target, outputRoot, expId, plotting=True):
+        # run option kwargs in the original code, seems to ~always be True
         atmospheric_lines = True
-        line_detection = True
 
         self.log.info('Starting SPECTRACTOR')
-        # xxx change plotting to an option?
-        self._makePath(outputRoot, plotting=True)  # early in case this fails, as processing is slow
+        # TODO: rename _makePath _makeOutputPath
+        self._makePath(outputRoot, plotting=plotting)  # early in case this fails, as processing is slow
 
-        # xxx if/when objects are returned, change these to butler.put()
+        # TODO: change to f-strings OR actually remove totally?
         outputFilenameSpectrum = os.path.join(outputRoot, 'v'+str(expId)+'_spectrum.fits')
         outputFilenameSpectrogram = os.path.join(outputRoot, 'v'+str(expId)+'_spectrogram.fits')
         outputFilenamePsf = os.path.join(outputRoot, 'v'+str(expId)+'_table.csv')
+        outputFilenameLines = os.path.join(outputRoot, 'v'+str(expId)+'_lines.csv')
 
-        # Load config file
+        # Upstream loads config file here
 
-        filt, disperser = self._getFilterAndDisperserFromExp(exp)
-        image = self.spectractorImageFromLsstExposure(exp, target_label=target, disperser_label=disperser)
+        # TODO: passing exact centroids seems to be causing a serious
+        # and non-obvious problem!
+        # this needs fixing for several reasons, mostly because if we have a
+        # known good centroid then we want to skip the refitting entirely
+        xpos = int(np.round(xpos))
+        ypos = int(np.round(ypos))
+
+        filter_label, disperser = self._getFilterAndDisperserFromExp(exp)
+        image = self.spectractorImageFromLsstExposure(exp, target_label=target, disperser_label=disperser,
+                                                      filter_label=filter_label)
+
         if self.TRANSPOSE:
             xpos, ypos = self.transposeCentroid(xpos, ypos, image)
 
@@ -293,57 +353,137 @@ class SpectractorShim():
             image.plot_image(scale='log10', target_pixcoords=(xpos, ypos))
             self.log.info(f"Pixel value at centroid = {image.data[int(ypos), int(xpos)]}")
 
-        if disperser == 'ronchi170lpmm':  # TODO: add something more robust as to whether to flip!
-            image, xpos, ypos = self.flipImageLeftRight(image, xpos, ypos)
-            self.displayImage(image, centroid=(xpos, ypos))
+        # XXX this needs removing or at least dealing with to not always
+        # just run! ASAP XXX
+        # if disperser == 'ronchi170lpmm':
+        # TODO: add something more robust as to whether to flip!
+        #     image, xpos, ypos = self.flipImageLeftRight(image, xpos, ypos)
+        #     self.displayImage(image, centroid=(xpos, ypos))
 
-        # Find the exact target position in the raw cut image: several methods
+        # Use fast mode
+        if parameters.CCD_REBIN > 1:
+            self.log.info(f'Rebinning image with rebin of {parameters.CCD_REBIN}')
+            # TODO: Fix bug here where the passed parameter isn't used!
+            image.target_guess = (xpos, ypos)
+            image = set_fast_mode(image)
+            if parameters.DEBUG:
+                image.plot_image(scale='symlog', target_pixcoords=image.target_guess)
 
         # image turning and target finding - use LSST code instead?
         # and if not, at least test how the rotation code compares
         # this part of Spectractor is certainly slow at the very least
-        if True:  # change this to be an option, at least for testing vs LSST
+        if True:  # TODO: change this to be an option, at least for testing vs LSST
             self.log.info('Search for the target in the image...')
-            _ = find_target(image, (xpos, ypos))  # sets the image.target_pixcoords
+            _ = find_target(image, image.target_guess)  # sets the image.target_pixcoords
             turn_image(image)  # creates the rotated data, and sets the image.target_pixcoords_rotated
 
             # Rotate the image: several methods
             # Find the exact target position in the rotated image:
             # several methods - but how are these controlled? MFL
             self.log.info('Search for the target in the rotated image...')
-            _ = find_target(image, (xpos, ypos), rotated=True)
+            _ = find_target(image, image.target_guess, rotated=True, use_wcs=False)
         else:
             # code path for if the image is pre-rotated by LSST code
             raise NotImplementedError
 
         # Create Spectrum object
         spectrum = Spectrum(image=image)
+        self.setAdrParameters(spectrum, exp)
+
         # Subtract background and bad pixels
-        extract_spectrum_from_image(image, spectrum, w=parameters.PIXWIDTH_SIGNAL,
+        extract_spectrum_from_image(image, spectrum, signal_width=parameters.PIXWIDTH_SIGNAL,
                                     ws=(parameters.PIXDIST_BACKGROUND,
-                                        parameters.PIXDIST_BACKGROUND+parameters.PIXWIDTH_BACKGROUND),
-                                    right_edge=parameters.CCD_IMSIZE-200)
+                                        parameters.PIXDIST_BACKGROUND + parameters.PIXWIDTH_BACKGROUND),
+                                    right_edge=parameters.CCD_IMSIZE)  # MFL: this used to be CCD_IMSIZE-200
         spectrum.atmospheric_lines = atmospheric_lines
         # Calibrate the spectrum
-        calibrate_spectrum(spectrum)
-        if line_detection:
-            self.log.info('Calibrating order %d spectrum...' % spectrum.order)
-            calibrate_spectrum_with_lines(spectrum)
-        else:
-            spectrum.header['WARNINGS'] = 'No calibration procedure with spectral features.'
+        with_adr = True
+        if parameters.OBS_OBJECT_TYPE != "STAR":
+            # XXX Check what this is set to, and how
+            # likely need to be passed through
+            with_adr = False
+        calibrate_spectrum(spectrum, with_adr=with_adr)
+
+        # not necessarily set during fit but required to be present for astropy
+        # fits writing to work (required to be in keeping with upstream)
+        spectrum.data_order2 = np.zeros_like(spectrum.lambdas_order2)
+        spectrum.err_order2 = np.zeros_like(spectrum.lambdas_order2)
+
+        # Full forward model extraction:
+        # adds transverse ADR and order 2 subtraction
+        w = None
+        if parameters.PSF_EXTRACTION_MODE == "PSF_2D" and parameters.OBS_OBJECT_TYPE == "STAR":
+            w = FullForwardModelFitWorkspace(spectrum, verbose=1, plot=True, live_fit=False,
+                                             amplitude_priors_method="spectrum")
+            for i in range(2):
+                spectrum.convert_from_flam_to_ADUrate()
+                spectrum = run_ffm_minimisation(w, method="newton")
+
+                # Calibrate the spectrum
+                calibrate_spectrum(spectrum, with_adr=False)  # XXX MFL: why isn't this with_adr=with_adr?
+                w.p[1] = spectrum.disperser.D
+                w.p[2] = spectrum.header['PIXSHIFT']
+
+                # Recompute and save params in class attributes
+                w.simulate(*w.p)
+
+                # Propagate parameters
+                A2, D2CCD, dx0, dy0, angle, B, *poly_params = w.p
+                w.spectrum.rotation_angle = angle
+                w.spectrum.spectrogram_bgd *= B
+                w.spectrum.spectrogram_bgd_rms *= B
+                w.spectrum.spectrogram_x0 += dx0
+                w.spectrum.spectrogram_y0 += dy0
+                w.spectrum.x0[0] += dx0
+                w.spectrum.x0[1] += dy0
+                w.spectrum.header["TARGETX"] = w.spectrum.x0[0]
+                w.spectrum.header["TARGETY"] = w.spectrum.x0[1]
+
+                # Compute order 2 contamination
+                w.spectrum.lambdas_order2 = w.lambdas
+                w.spectrum.data_order2 = (A2 * w.amplitude_params
+                                          * w.spectrum.disperser.ratio_order_2over1(w.lambdas))
+                w.spectrum.err_order2 = (A2 * w.amplitude_params_err
+                                         * w.spectrum.disperser.ratio_order_2over1(w.lambdas))
+
+                # Compare with truth if available
+                if (parameters.PSF_EXTRACTION_MODE == "PSF_2D"
+                        and 'LBDAS_T' in spectrum.header and parameters.DEBUG):
+                    plot_comparison_truth(spectrum, w)
 
         # Save the spectrum
         self._ensureFitsHeader(spectrum)  # SIMPLE is missing by default
 
         spectrum.save_spectrum(outputFilenameSpectrum, overwrite=True)
         spectrum.save_spectrogram(outputFilenameSpectrogram, overwrite=True)
-        # Plot the spectrum
+        spectrum.lines.print_detected_lines(output_file_name=outputFilenameLines,
+                                            overwrite=True, amplitude_units=spectrum.units)
 
+        # Plot the spectrum
         parameters.DISPLAY = True
         if parameters.VERBOSE and parameters.DISPLAY:
             spectrum.plot_spectrum(xlim=None)
-        distance = spectrum.chromatic_psf.get_distance_along_dispersion_axis()
-        spectrum.lambdas = np.interp(distance, spectrum.pixels, spectrum.lambdas)
+
         spectrum.chromatic_psf.table['lambdas'] = spectrum.lambdas
         spectrum.chromatic_psf.table.write(outputFilenamePsf, overwrite=True)
-        return spectrum
+
+        result = Spectraction()
+        result.spectrum = spectrum
+        result.image = image
+        result.w = w
+
+        # XXX technically this should be a pipeBase.Struct I think
+        # change it if it matters
+        return result
+
+
+class Spectraction:
+    """A simple class for holding the Spectractor outputs.
+
+    Will likely be updated in future to provide some simple getters to allow
+    easier access to parts of the data structure, and perhaps some convenience
+    methods for interacting with the more awkward objects (e.g. the Lines).
+    """
+    # result.spectrum = spectrum
+    # result.image = image
+    # result.w = w

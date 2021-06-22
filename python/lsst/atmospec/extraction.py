@@ -33,7 +33,7 @@ import lsst.pipe.base as pipeBase
 import lsst.pex.config as pexConfig
 import lsst.afw.math as afwMath
 import lsst.afw.image as afwImage
-from .utils import getSamplePoints, argMaxNd
+from .utils import getSamplePoints  # , argMaxNd
 
 
 __all__ = ['SpectralExtractionTask', 'SpectralExtractionTaskConfig']
@@ -169,8 +169,8 @@ class SpectralExtractionTask(pipeBase.Task):
 
         assert nbins > 0
         if nbins > maskedImage.getHeight() - 1:
-            self.log.warn(f"More bins selected for background than pixels in image height." +
-                          f" Reducing numbers of bins from {nbins} to {maskedImage.getHeight()-1}.")
+            self.log.warn("More bins selected for background than pixels in image height."
+                          + f" Reducing numbers of bins from {nbins} to {maskedImage.getHeight()-1}.")
             nbins = maskedImage.getHeight() - 1
 
         nx = 1
@@ -224,7 +224,8 @@ class SpectralExtractionTask(pipeBase.Task):
         """Docstring here."""
 
         # xxx check if this is modified and dispose of copy if not
-        # footprint = self.exp[self.spectrumBbox].maskedImage.image.array.copy()
+        # footprint = self.exp[self.spectrumBbox]...
+        # ...maskedImage.image.array.copy()
 
         if not self.config.perRowBackground:
             maskedImage = self.bgSubMi
@@ -341,7 +342,7 @@ class SpectralExtractionTask(pipeBase.Task):
                     pl.xlabel('Spectrum spatial profile (pixel)')
                     pl.ylabel('Amplitude (ADU)')
                     pl.title('CTIO .9m - %s'%(self.spectrum.object_name))
-                    pl.plot(pixels, fit, label='Gauss')
+                    # pl.plot(pixels, fit, label='Gauss')
                     pl.yscale('log')
                     pl.ylim(1., 1E6)
                     pl.plot(pixels, footprintSlice)
@@ -350,7 +351,7 @@ class SpectralExtractionTask(pipeBase.Task):
 
         ##########################################################
         # after the row-by-row processing
-        maxRow = argMaxNd(footprintArray)[0]
+        # maxRow = argMaxNd(footprintArray)[0]
 
         if self.config.writeResiduals:
             self.log.warn('Not implemented yet')
