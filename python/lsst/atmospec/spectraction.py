@@ -448,18 +448,12 @@ class SpectractorShim():
         # Save the spectrum
         self._ensureFitsHeader(spectrum)  # SIMPLE is missing by default
 
-        spectrum.save_spectrum(outputFilenameSpectrum, overwrite=True)
-        spectrum.save_spectrogram(outputFilenameSpectrogram, overwrite=True)
-        spectrum.lines.print_detected_lines(output_file_name=outputFilenameLines,
-                                            overwrite=True, amplitude_units=spectrum.units)
-
         # Plot the spectrum
         parameters.DISPLAY = True
         if parameters.VERBOSE and parameters.DISPLAY:
             spectrum.plot_spectrum(xlim=None)
 
         spectrum.chromatic_psf.table['lambdas'] = spectrum.lambdas
-        spectrum.chromatic_psf.table.write(outputFilenamePsf, overwrite=True)
 
         result = Spectraction()
         result.spectrum = spectrum
