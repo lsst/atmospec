@@ -188,7 +188,7 @@ class SpectractorShim():
             filt, grating = filterFullName.split(FILTER_DELIMITER)
         return filt, grating
 
-    def _setImageAndHeaderInfo(self, image, exp, useVisitInfo=False):
+    def _setImageAndHeaderInfo(self, image, exp, useVisitInfo=True):
         # currently set in spectractor.tools.extract_info_from_CTIO_header()
         filt, disperser = self._getFilterAndDisperserFromExp(exp)
 
@@ -206,10 +206,12 @@ class SpectractorShim():
             if useVisitInfo:
                 vi = exp.getInfo().getVisitInfo()
                 image.header.airmass = vi.getBoresightAirmass()  # currently returns nan for obs_ctio0m9
+                image.airmass = vi.getBoresightAirmass()  # currently returns nan for obs_ctio0m9
 
             else:
                 md = exp.getMetadata().toDict()
                 image.header.airmass = md['AIRMASS']
+                image.airmass = md['AIRMASS']
                 image.date_obs = md['DATE']
         except Exception:
             self.log.warn("Failed to set AIRMASS, default value of 1 used")
