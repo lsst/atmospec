@@ -59,7 +59,7 @@ class SingleStarCentroidTaskConnections(pipeBase.PipelineTaskConnections,
         deferLoad=True,
         multiple=True,
     )
-    outputCentroid = cT.Output(
+    atmospecCentroid = cT.Output(
         name="atmospecCentroid",
         doc="The main star centroid in yaml format.",
         storageClass="StructuredDataDict",
@@ -72,47 +72,53 @@ class SingleStarCentroidTaskConfig(pipeBase.PipelineTaskConfig,
     """Configuration parameters for ProcessStarTask."""
     astromRefObjLoader = pexConfig.ConfigurableField(
         target=LoadIndexedReferenceObjectsTask,
-        doc="XXX",
+        doc="Reference object loader for astrometric calibration",
     )
-    astromTask = pexConfig.ConfigurableField(
+    astrometry = pexConfig.ConfigurableField(
         target=AstrometryTask,
-        doc="XXX",
+        doc="Task to perform astrometric calibration to refine the WCS",
     )
     qfmTask = pexConfig.ConfigurableField(
         target=QuickFrameMeasurementTask,
         doc="XXX",
     )
+    referenceFilterOverride = pexConfig.Field(
+        dtype=str,
+        doc="Which filter in the reference catalog to match to?",
+        default="phot_g_mean"
+    )
 
     def setDefaults(self):
-        self.astromRefObjLoader.ref_dataset_name = 'gaia_dr2_20191105'
+        # this is a null option now in Gen3 - do not set it here
+        # self.astromRefObjLoader.ref_dataset_name
+
         self.astromRefObjLoader.pixelMargin = 1000
 
-        self.astromTask.wcsFitter.retarget(FitAffineWcsTask)
-        self.astromTask.referenceSelector.doMagLimit = True
-        self.astromTask.referenceSelector.magLimit.fluxField = "phot_g_mean_flux"
-        self.astromTask.matcher.maxRotationDeg = 5.99
-        self.astromTask.matcher.maxOffsetPix = 3000
-        self.astromTask.sourceSelector['matcher'].minSnr = 10
+        self.astrometry.wcsFitter.retarget(FitAffineWcsTask)
+        self.astrometry.referenceSelector.doMagLimit = True
+        self.astrometry.referenceSelector.magLimit.fluxField = "phot_g_mean_flux"
+        self.astrometry.matcher.maxRotationDeg = 5.99
+        self.astrometry.matcher.maxOffsetPix = 3000
+        self.astrometry.sourceSelector['matcher'].minSnr = 10
 
         magLimit = MagnitudeLimit()
         magLimit.minimum = 1
         magLimit.maximum = 15
-        self.astromTask.referenceSelector.magLimit = magLimit
+        self.astrometry.referenceSelector.magLimit = magLimit
 
 
-class SingleStarCentroidTask(pipeBase.PipelineTask, pipeBase.CmdLineTask):
+class SingleStarCentroidTask(pipeBase.PipelineTask):
     """XXX Docs here
     """
 
     ConfigClass = SingleStarCentroidTaskConfig
     _DefaultName = 'singleStarCentroid'
 
-    def __init__(self):
-        self.makeSubtask('astromRefObjLoader')
-        self.makeSubtask('astromTask')
-        self.makeSubtask('qfmTask')
+    def __init__(self, initInputs=None, **kwargs):
+        super().__init__(**kwargs)
 
-        super().__init__()
+        self.makeSubtask("astrometry", refObjLoader=None)
+        self.makeSubtask('qfmTask')
 
     def runQuantum(self, butlerQC, inputRefs, outputRefs):
         inputs = butlerQC.get(inputRefs)
@@ -121,7 +127,10 @@ class SingleStarCentroidTask(pipeBase.PipelineTask, pipeBase.CmdLineTask):
                                              refCats=inputs.pop('astromRefCat'),
                                              config=self.config.astromRefObjLoader, log=self.log)
 
-        self.astromTask.setRefObjLoader(refObjLoader)
+        # self.makeSubtask('astromRefObjLoader')
+        refObjLoader.pixelMargin = 1000
+
+        self.astrometry.setRefObjLoader(refObjLoader)
 
         # See L603 (def runQuantum(self, butlerQC, inputRefs, outputRefs):)
         # in calibrate.py to put photocal back in
@@ -132,8 +141,6 @@ class SingleStarCentroidTask(pipeBase.PipelineTask, pipeBase.CmdLineTask):
     def run(self, inputExp, inputSources):
         """XXX Docs
         """
-        # TODO: REMOVE THIS HARD CODING
-        referenceFilterName = 'phot_g_mean'
 
         # TODO: Change this to doing this the proper way
         referenceFilterName = self.config.referenceFilterOverride
@@ -144,7 +151,7 @@ class SingleStarCentroidTask(pipeBase.PipelineTask, pipeBase.CmdLineTask):
 
         successfulFit = False
         try:
-            astromResult = self.astromTask.run(sourceCat=inputSources, exposure=inputExp)
+            astromResult = self.astrometry.run(sourceCat=inputSources, exposure=inputExp)
             scatter = astromResult.scatterOnSky.asArcseconds()
             inputExp.setFilterLabel(originalFilterLabel)
             if scatter < 1:
