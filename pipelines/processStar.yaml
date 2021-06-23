@@ -13,11 +13,11 @@ tasks:
       doCrosstalk: False
       doSaturationInterpolation: False
       overscan.fitType: 'MEDIAN_PER_ROW'
-      doBias: False  # XXX remove this for sure
+      doBias: True
   characterizeImage:
     class: lsst.pipe.tasks.characterizeImage.CharacterizeImageTask
     config:
-      repair.cosmicray.nCrPixelMax: 100000  # XXX remove this?
+      repair.doCosmicRay: False
       doApCorr: False
       doMeasurePsf: False
       detection.includeThresholdMultiplier: 3
