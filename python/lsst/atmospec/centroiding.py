@@ -96,15 +96,14 @@ class SingleStarCentroidTaskConfig(pipeBase.PipelineTaskConfig,
 
         self.astrometry.wcsFitter.retarget(FitAffineWcsTask)
         self.astrometry.referenceSelector.doMagLimit = True
-        self.astrometry.referenceSelector.magLimit.fluxField = "phot_g_mean_flux"
-        self.astrometry.matcher.maxRotationDeg = 5.99
-        self.astrometry.matcher.maxOffsetPix = 3000
-        self.astrometry.sourceSelector['matcher'].minSnr = 10
-
         magLimit = MagnitudeLimit()
         magLimit.minimum = 1
         magLimit.maximum = 15
         self.astrometry.referenceSelector.magLimit = magLimit
+        self.astrometry.referenceSelector.magLimit.fluxField = "phot_g_mean_flux"
+        self.astrometry.matcher.maxRotationDeg = 5.99
+        self.astrometry.matcher.maxOffsetPix = 3000
+        self.astrometry.sourceSelector['matcher'].minSnr = 10
 
 
 class SingleStarCentroidTask(pipeBase.PipelineTask):
@@ -156,8 +155,7 @@ class SingleStarCentroidTask(pipeBase.PipelineTask):
             inputExp.setFilterLabel(originalFilterLabel)
             if scatter < 1:
                 successfulFit = True
-
-        except Exception:  # TODO: change this semi-naked except
+        except RuntimeError:
             self.log.warn("Solver failed to run completely")
             inputExp.setFilterLabel(originalFilterLabel)
 
