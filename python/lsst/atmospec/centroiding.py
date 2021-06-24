@@ -165,7 +165,8 @@ class SingleStarCentroidTask(pipeBase.PipelineTask):
             target = inputExp.getMetadata()['OBJECT']
             centroid = getTargetCentroidFromWcs(inputExp, target, logger=self.log)
         else:
-            centroid = self.qfmTask.run(inputExp).brightestObjCentroid
+            result = self.qfmTask.run(inputExp)
+            centroid = result.brightestObjCentroid
 
         result = pipeBase.Struct(atmospecCentroid={'centroid': centroid,
                                                    'astrometricMatch': successfulFit})
