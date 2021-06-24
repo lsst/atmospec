@@ -127,9 +127,7 @@ class SingleStarCentroidTask(pipeBase.PipelineTask):
                                              refCats=inputs.pop('astromRefCat'),
                                              config=self.config.astromRefObjLoader, log=self.log)
 
-        # self.makeSubtask('astromRefObjLoader')
         refObjLoader.pixelMargin = 1000
-
         self.astrometry.setRefObjLoader(refObjLoader)
 
         # See L603 (def runQuantum(self, butlerQC, inputRefs, outputRefs):)
