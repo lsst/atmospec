@@ -596,7 +596,7 @@ class ProcessStarTask(pipeBase.CmdLineTask):
         try:
             astromResult = solver.run(sourceCat=icSrc, exposure=exp)
             exp.setFilterLabel(originalFilterLabel)
-        except Exception:
+        except RuntimeError:
             self.log.warn("Solver failed to run completely")
             exp.setFilterLabel(originalFilterLabel)
             return None
