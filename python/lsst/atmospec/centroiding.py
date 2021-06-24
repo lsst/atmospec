@@ -89,6 +89,7 @@ class SingleStarCentroidTaskConfig(pipeBase.PipelineTaskConfig,
     )
 
     def setDefaults(self):
+        super().setDefaults()
         # this is a null option now in Gen3 - do not set it here
         # self.astromRefObjLoader.ref_dataset_name
 
