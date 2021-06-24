@@ -165,6 +165,9 @@ class SingleStarCentroidTask(pipeBase.PipelineTask):
             result = self.qfmTask.run(inputExp)
             centroid = result.brightestObjCentroid
 
-        result = pipeBase.Struct(atmospecCentroid={'centroid': (centroid[0], centroid[1]),
+        centroidTuple = (centroid[0], centroid[1])  # unify Point2D or tuple to tuple
+        self.log.info(f"Centroid of main star found at {centroidTuple} found"
+                      f" via {'astrometry' if successfulFit else 'QuickFrameMeasurement'}")
+        result = pipeBase.Struct(atmospecCentroid={'centroid': centroidTuple,
                                                    'astrometricMatch': successfulFit})
         return result
