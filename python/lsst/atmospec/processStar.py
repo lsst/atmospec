@@ -244,6 +244,8 @@ class ProcessStarTaskConfig(pexConfig.Config):
 
         self.charImage.doApCorr = False
         self.charImage.doMeasurePsf = False
+        self.charImage.repair.cosmicray.nCrPixelMax = 100000  # XXX this is new!
+        self.charImage.repair.doCosmicRay = False  # XXX this is new!
         if self.charImage.doMeasurePsf:
             self.charImage.measurePsf.starSelector['objectSize'].signalToNoiseMin = 10.0
             self.charImage.measurePsf.starSelector['objectSize'].fluxMin = 5000.0
