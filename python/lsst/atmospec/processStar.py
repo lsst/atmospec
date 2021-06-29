@@ -65,33 +65,34 @@ COMMISSIONING = False  # allows illegal things for on the mountain usage.
 
 
 class ProcessStarTaskConnections(pipeBase.PipelineTaskConnections,
-                                 dimensions=("instrument", "exposure", "detector")):
+                                 dimensions=("instrument", "visit", "detector")):
     inputExp = cT.Input(
         name="icExp",
         doc="Image-characterize output exposure",
-        storageClass="Exposure",
-        dimensions=("instrument", "exposure", "detector"),
+        storageClass="ExposureF",
+        dimensions=("instrument", "visit", "detector"),
         multiple=False,
     )
     inputCentroid = cT.Input(
         name="atmospecCentroid",
         doc="The main star centroid in yaml format.",
         storageClass="StructuredDataDict",
-        dimensions=("instrument", "exposure", "detector"),
+        dimensions=("instrument", "visit", "detector"),
         multiple=False,
     )
     outputSpectraction = cT.Output(
-        name="spectractorOutput",
+        name="spectractorTestOutput",  # TODO: make this the real thing once it works
         doc="The Spectractor output structure.",
         storageClass="StructuredDataDict",
-        dimensions=("instrument", "exposure", "detector"),
+        dimensions=("instrument", "visit", "detector"),
     )
 
     def __init__(self, *, config=None):
         super().__init__(config=config)
 
 
-class ProcessStarTaskConfig(pexConfig.Config):
+class ProcessStarTaskConfig(pipeBase.PipelineTaskConfig,
+                            pipelineConnections=ProcessStarTaskConnections):
     """Configuration parameters for ProcessStarTask."""
 
     isr = pexConfig.ConfigurableField(
@@ -218,7 +219,7 @@ class ProcessStarTaskConfig(pexConfig.Config):
     spectractorDebugMode = pexConfig.Field(
         dtype=bool,
         doc="Set debug mode for Spectractor",
-        default=False
+        default=True
     )
     spectractorDebugLogging = pexConfig.Field(  # TODO: tie this to the task debug level?
         dtype=bool,
@@ -265,7 +266,7 @@ class ProcessStarTask(pipeBase.CmdLineTask):
 
     def __init__(self, *, butler=None, psfRefObjLoader=None, **kwargs):
         # TODO: rename psfRefObjLoader to refObjLoader
-        super().__init__(**kwargs)
+        super().__init__()
         self.makeSubtask("isr")
         self.makeSubtask("charImage", butler=butler, refObjLoader=psfRefObjLoader)
 
@@ -472,10 +473,12 @@ class ProcessStarTask(pipeBase.CmdLineTask):
     def runQuantum(self, butlerQC, inputRefs, outputRefs):
         inputs = butlerQC.get(inputRefs)
 
+        inputs['dataIdDict'] = inputRefs.inputExp.dataId.byName()
+
         outputs = self.run(**inputs)
         butlerQC.put(outputs, outputRefs)
 
-    def run(self, *, exp, sourceCentroid):
+    def run(self, *, inputExp, inputCentroid, dataIdDict):
         starNames = self.loadStarNames()
 
         overrideDict = {'SAVE': False,
@@ -496,7 +499,7 @@ class ProcessStarTask(pipeBase.CmdLineTask):
 
         # TODO: think if this is the right place for this
         # probably wants to go in spectraction.py really
-        md = exp.getMetadata()
+        md = inputExp.getMetadata()
         linearStagePosition = 115  # this seems to be the rough zero-point for some reason
         if 'LINSPOS' in md:
             position = md['LINSPOS']  # linear stage position in mm from CCD, larger->further from CCD
@@ -504,7 +507,7 @@ class ProcessStarTask(pipeBase.CmdLineTask):
                 linearStagePosition += position
         overrideDict['DISTANCE2CCD'] = linearStagePosition
 
-        target = exp.getMetadata()['OBJECT']
+        target = inputExp.getMetadata()['OBJECT']
         if self.config.forceObjectName:
             self.log.info(f"Forcing target name from {target} to {self.config.forceObjectName}")
             target = self.config.forceObjectName
@@ -519,9 +522,18 @@ class ProcessStarTask(pipeBase.CmdLineTask):
                                       paramOverrides=overrideDict,
                                       supplementaryParameters=supplementDict,
                                       resetParameters=resetParameters)
-        result = spectractor.run(exp, *sourceCentroid, target)
 
-        return result
+        if 'astrometricMatch' in inputCentroid:
+            centroid = inputCentroid['centroid']
+        else:  # it's a raw tuple
+            centroid = inputCentroid  # TODO: put this support in the docstring
+
+        spectraction = spectractor.run(inputExp, *centroid, target)
+
+        self.log.info("Finished processing %s" % (dataIdDict))
+        spectraction.dataId = dataIdDict
+        self.makeResultPickleable(spectraction)
+        return pipeBase.Struct(outputSpectraction={'spectraction': spectraction})
 
     def runDataRef(self, dataRef):
         """Run the ProcessStarTask on a ButlerDataRef for a single exposure.
