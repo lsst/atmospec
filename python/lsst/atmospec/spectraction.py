@@ -319,13 +319,14 @@ class SpectractorShim():
         airmass = vi.getBoresightAirmass()
         spectrum.adr_params = [dec, hourAngle, temperature, pressure, humidity, airmass]
 
-    def run(self, exp, xpos, ypos, target, outputRoot, plotting=True):
+    def run(self, exp, xpos, ypos, target, outputRoot=None, plotting=True):
         # run option kwargs in the original code, seems to ~always be True
         atmospheric_lines = True
 
         self.log.info('Starting SPECTRACTOR')
         # TODO: rename _makePath _makeOutputPath
-        self._makePath(outputRoot, plotting=plotting)  # early in case this fails, as processing is slow
+        if outputRoot is not None:  # TODO: remove post Gen3 transition
+            self._makePath(outputRoot, plotting=plotting)  # early in case this fails, as processing is slow
 
         # Upstream loads config file here
 

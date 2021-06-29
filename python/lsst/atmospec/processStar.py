@@ -469,6 +469,60 @@ class ProcessStarTask(pipeBase.CmdLineTask):
 
         exp.setMetadata(md)
 
+    def runQuantum(self, butlerQC, inputRefs, outputRefs):
+        inputs = butlerQC.get(inputRefs)
+
+        outputs = self.run(**inputs)
+        butlerQC.put(outputs, outputRefs)
+
+    def run(self, *, exp, sourceCentroid):
+        starNames = self.loadStarNames()
+
+        overrideDict = {'SAVE': False,
+                        'OBS_NAME': 'AUXTEL',
+                        'DEBUG': self.config.spectractorDebugMode,
+                        'DEBUG_LOGGING': self.config.spectractorDebugLogging,
+                        'DISPLAY': self.config.doDisplayPlots,
+                        'CCD_REBIN': self.config.binning,
+                        'VERBOSE': 0,
+                        # 'CCD_IMSIZE': 4000}
+                        }
+        supplementDict = {'CALLING_CODE': 'LSST_DM',
+                          'STAR_NAMES': starNames}
+
+        # anything that changes between dataRefs!
+        resetParameters = {}
+        # TODO: look at what to do with config option doSavePlots
+
+        # TODO: think if this is the right place for this
+        # probably wants to go in spectraction.py really
+        md = exp.getMetadata()
+        linearStagePosition = 115  # this seems to be the rough zero-point for some reason
+        if 'LINSPOS' in md:
+            position = md['LINSPOS']  # linear stage position in mm from CCD, larger->further from CCD
+            if position is not None:
+                linearStagePosition += position
+        overrideDict['DISTANCE2CCD'] = linearStagePosition
+
+        target = exp.getMetadata()['OBJECT']
+        if self.config.forceObjectName:
+            self.log.info(f"Forcing target name from {target} to {self.config.forceObjectName}")
+            target = self.config.forceObjectName
+
+        if target in ['FlatField position', 'Park position', 'Test', 'NOTSET']:
+            raise ValueError(f"OBJECT set to {target} - this is not a celestial object!")
+
+        packageDir = getPackageDir('atmospec')
+        configFilename = os.path.join(packageDir, 'config', 'auxtel.ini')
+
+        spectractor = SpectractorShim(configFile=configFilename,
+                                      paramOverrides=overrideDict,
+                                      supplementaryParameters=supplementDict,
+                                      resetParameters=resetParameters)
+        result = spectractor.run(exp, *sourceCentroid, target)
+
+        return result
+
     def runDataRef(self, dataRef):
         """Run the ProcessStarTask on a ButlerDataRef for a single exposure.
 
@@ -545,7 +599,7 @@ class ProcessStarTask(pipeBase.CmdLineTask):
                 raise RuntimeError(f"Failed to create output dir {outputRoot}")
         expId = dataRef.dataId['expId']
 
-        result = self.run(exposure, outputRoot, expId, sourceCentroid)
+        result = self.runGen2(exposure, outputRoot, expId, sourceCentroid)
         self.log.info("Finished processing %s" % (dataRef.dataId))
 
         result.dataId = dataId
@@ -621,7 +675,7 @@ class ProcessStarTask(pipeBase.CmdLineTask):
             lines = f.readlines()
         return [line.strip() for line in lines]
 
-    def run(self, exp, spectractorOutputRoot, expId, sourceCentroid):
+    def runGen2(self, exp, spectractorOutputRoot, expId, sourceCentroid):
         """Calculate the wavelength calibrated 1D spectrum from a postISRCCD.
 
         An outline of the steps in the processing is as follows:
