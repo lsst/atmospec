@@ -475,8 +475,9 @@ class ProcessStarTask(pipeBase.CmdLineTask):
 
         inputs['dataIdDict'] = inputRefs.inputExp.dataId.byName()
 
-        outputs = self.run(**inputs)
-        butlerQC.put(outputs, outputRefs)
+        outputs = self.run(**inputs)  # noqa F841 - remove noqa with DM-30966 below
+        # TODO: DM-30966 Make this output Gen3 serializable
+        # butlerQC.put(outputs, outputRefs)  # uncomment after DM-30966
 
     def run(self, *, inputExp, inputCentroid, dataIdDict):
         starNames = self.loadStarNames()
