@@ -46,7 +46,7 @@ from lsst.meas.astrom import AstrometryTask, FitAffineWcsTask
 import lsst.afw.detection as afwDetect
 
 from .spectraction import SpectractorShim
-from .utils import getTargetCentroidFromWcs
+from .utils import getTargetCentroidFromWcs, getLinearStagePosition
 
 COMMISSIONING = False  # allows illegal things for on the mountain usage.
 
@@ -500,12 +500,7 @@ class ProcessStarTask(pipeBase.CmdLineTask):
 
         # TODO: think if this is the right place for this
         # probably wants to go in spectraction.py really
-        md = inputExp.getMetadata()
-        linearStagePosition = 115  # this seems to be the rough zero-point for some reason
-        if 'LINSPOS' in md:
-            position = md['LINSPOS']  # linear stage position in mm from CCD, larger->further from CCD
-            if position is not None:
-                linearStagePosition += position
+        linearStagePosition = getLinearStagePosition(inputExp)
         overrideDict['DISTANCE2CCD'] = linearStagePosition
 
         target = inputExp.getMetadata()['OBJECT']
@@ -754,12 +749,7 @@ class ProcessStarTask(pipeBase.CmdLineTask):
 
         # TODO: think if this is the right place for this
         # probably wants to go in spectraction.py really
-        md = exp.getMetadata()
-        linearStagePosition = 115  # this seems to be the rough zero-point for some reason
-        if 'LINSPOS' in md:
-            position = md['LINSPOS']  # linear stage position in mm from CCD, larger->further from CCD
-            if position is not None:
-                linearStagePosition += position
+        linearStagePosition = getLinearStagePosition(exp)
         overrideDict['DISTANCE2CCD'] = linearStagePosition
 
         target = exp.getMetadata()['OBJECT']
