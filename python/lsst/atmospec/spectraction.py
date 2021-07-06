@@ -1,25 +1,23 @@
+# This file is part of atmospec.
 #
-# LSST Data Management System
-#
-# Copyright 2008-2018  AURA/LSST.
-#
-# This product includes software developed by the
-# LSST Project (http://www.lsst.org/).
+# Developed for the LSST Data Management System.
+# This product includes software developed by the LSST Project
+# (https://www.lsst.org).
+# See the COPYRIGHT file at the top-level directory of this distribution
+# for details of code ownership.
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# This program is distributed in the hope hat it will be useful,
+# This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
-# You should have received a copy of the LSST License Statement and
-# the GNU General Public License along with this program.  If not,
-# see <https://www.lsstcorp.org/LegalNotices/>.
-#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import os
 import numpy as np
@@ -319,19 +317,14 @@ class SpectractorShim():
         airmass = vi.getBoresightAirmass()
         spectrum.adr_params = [dec, hourAngle, temperature, pressure, humidity, airmass]
 
-    def run(self, exp, xpos, ypos, target, outputRoot, expId, plotting=True):
+    def run(self, exp, xpos, ypos, target, outputRoot=None, plotting=True):
         # run option kwargs in the original code, seems to ~always be True
         atmospheric_lines = True
 
         self.log.info('Starting SPECTRACTOR')
         # TODO: rename _makePath _makeOutputPath
-        self._makePath(outputRoot, plotting=plotting)  # early in case this fails, as processing is slow
-
-        # TODO: change to f-strings OR actually remove totally?
-        outputFilenameSpectrum = os.path.join(outputRoot, 'v'+str(expId)+'_spectrum.fits')
-        outputFilenameSpectrogram = os.path.join(outputRoot, 'v'+str(expId)+'_spectrogram.fits')
-        outputFilenamePsf = os.path.join(outputRoot, 'v'+str(expId)+'_table.csv')
-        outputFilenameLines = os.path.join(outputRoot, 'v'+str(expId)+'_lines.csv')
+        if outputRoot is not None:  # TODO: remove post Gen3 transition
+            self._makePath(outputRoot, plotting=plotting)  # early in case this fails, as processing is slow
 
         # Upstream loads config file here
 
@@ -454,18 +447,12 @@ class SpectractorShim():
         # Save the spectrum
         self._ensureFitsHeader(spectrum)  # SIMPLE is missing by default
 
-        spectrum.save_spectrum(outputFilenameSpectrum, overwrite=True)
-        spectrum.save_spectrogram(outputFilenameSpectrogram, overwrite=True)
-        spectrum.lines.print_detected_lines(output_file_name=outputFilenameLines,
-                                            overwrite=True, amplitude_units=spectrum.units)
-
         # Plot the spectrum
         parameters.DISPLAY = True
         if parameters.VERBOSE and parameters.DISPLAY:
             spectrum.plot_spectrum(xlim=None)
 
         spectrum.chromatic_psf.table['lambdas'] = spectrum.lambdas
-        spectrum.chromatic_psf.table.write(outputFilenamePsf, overwrite=True)
 
         result = Spectraction()
         result.spectrum = spectrum

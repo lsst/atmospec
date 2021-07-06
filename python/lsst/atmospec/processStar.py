@@ -1,25 +1,23 @@
+# This file is part of atmospec.
 #
-# LSST Data Management System
-#
-# Copyright 2008-2018  AURA/LSST.
-#
-# This product includes software developed by the
-# LSST Project (http://www.lsst.org/).
+# Developed for the LSST Data Management System.
+# This product includes software developed by the LSST Project
+# (https://www.lsst.org).
+# See the COPYRIGHT file at the top-level directory of this distribution
+# for details of code ownership.
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# This program is distributed in the hope hat it will be useful,
+# This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
-# You should have received a copy of the LSST License Statement and
-# the GNU General Public License along with this program.  If not,
-# see <https://www.lsstcorp.org/LegalNotices/>.
-#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 __all__ = ['ProcessStarTask', 'ProcessStarTaskConfig']
 
@@ -36,6 +34,8 @@ import lsst.geom as geom
 from lsst.ip.isr import IsrTask
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
+import lsst.pipe.base.connectionTypes as cT
+
 from lsst.utils import getPackageDir
 from lsst.pipe.tasks.characterizeImage import CharacterizeImageTask
 from lsst.meas.algorithms import LoadIndexedReferenceObjectsTask, MagnitudeLimit
@@ -44,7 +44,7 @@ from lsst.meas.astrom import AstrometryTask, FitAffineWcsTask
 import lsst.afw.detection as afwDetect
 
 from .spectraction import SpectractorShim
-from .utils import getTargetCentroidFromWcs
+from .utils import getTargetCentroidFromWcs, getLinearStagePosition
 
 COMMISSIONING = False  # allows illegal things for on the mountain usage.
 
@@ -62,7 +62,35 @@ COMMISSIONING = False  # allows illegal things for on the mountain usage.
 # change spectractions run method to be ~all kwargs with *,...
 
 
-class ProcessStarTaskConfig(pexConfig.Config):
+class ProcessStarTaskConnections(pipeBase.PipelineTaskConnections,
+                                 dimensions=("instrument", "visit", "detector")):
+    inputExp = cT.Input(
+        name="icExp",
+        doc="Image-characterize output exposure",
+        storageClass="ExposureF",
+        dimensions=("instrument", "visit", "detector"),
+        multiple=False,
+    )
+    inputCentroid = cT.Input(
+        name="atmospecCentroid",
+        doc="The main star centroid in yaml format.",
+        storageClass="StructuredDataDict",
+        dimensions=("instrument", "visit", "detector"),
+        multiple=False,
+    )
+    outputSpectraction = cT.Output(
+        name="spectractorTestOutput",  # TODO: make this the real thing once it works
+        doc="The Spectractor output structure.",
+        storageClass="StructuredDataDict",
+        dimensions=("instrument", "visit", "detector"),
+    )
+
+    def __init__(self, *, config=None):
+        super().__init__(config=config)
+
+
+class ProcessStarTaskConfig(pipeBase.PipelineTaskConfig,
+                            pipelineConnections=ProcessStarTaskConnections):
     """Configuration parameters for ProcessStarTask."""
 
     isr = pexConfig.ConfigurableField(
@@ -189,7 +217,7 @@ class ProcessStarTaskConfig(pexConfig.Config):
     spectractorDebugMode = pexConfig.Field(
         dtype=bool,
         doc="Set debug mode for Spectractor",
-        default=False
+        default=True
     )
     spectractorDebugLogging = pexConfig.Field(  # TODO: tie this to the task debug level?
         dtype=bool,
@@ -215,6 +243,8 @@ class ProcessStarTaskConfig(pexConfig.Config):
 
         self.charImage.doApCorr = False
         self.charImage.doMeasurePsf = False
+        self.charImage.repair.cosmicray.nCrPixelMax = 100000
+        self.charImage.repair.doCosmicRay = False
         if self.charImage.doMeasurePsf:
             self.charImage.measurePsf.starSelector['objectSize'].signalToNoiseMin = 10.0
             self.charImage.measurePsf.starSelector['objectSize'].fluxMin = 5000.0
@@ -234,7 +264,7 @@ class ProcessStarTask(pipeBase.CmdLineTask):
 
     def __init__(self, *, butler=None, psfRefObjLoader=None, **kwargs):
         # TODO: rename psfRefObjLoader to refObjLoader
-        super().__init__(**kwargs)
+        super().__init__()
         self.makeSubtask("isr")
         self.makeSubtask("charImage", butler=butler, refObjLoader=psfRefObjLoader)
 
@@ -438,6 +468,67 @@ class ProcessStarTask(pipeBase.CmdLineTask):
 
         exp.setMetadata(md)
 
+    def runQuantum(self, butlerQC, inputRefs, outputRefs):
+        inputs = butlerQC.get(inputRefs)
+
+        inputs['dataIdDict'] = inputRefs.inputExp.dataId.byName()
+
+        outputs = self.run(**inputs)  # noqa F841 - remove noqa with DM-30966 below
+        # TODO: DM-30966 Make this output Gen3 serializable
+        # butlerQC.put(outputs, outputRefs)  # uncomment after DM-30966
+
+    def run(self, *, inputExp, inputCentroid, dataIdDict):
+        starNames = self.loadStarNames()
+
+        overrideDict = {'SAVE': False,
+                        'OBS_NAME': 'AUXTEL',
+                        'DEBUG': self.config.spectractorDebugMode,
+                        'DEBUG_LOGGING': self.config.spectractorDebugLogging,
+                        'DISPLAY': self.config.doDisplayPlots,
+                        'CCD_REBIN': self.config.binning,
+                        'VERBOSE': 0,
+                        # 'CCD_IMSIZE': 4000}
+                        }
+        supplementDict = {'CALLING_CODE': 'LSST_DM',
+                          'STAR_NAMES': starNames}
+
+        # anything that changes between dataRefs!
+        resetParameters = {}
+        # TODO: look at what to do with config option doSavePlots
+
+        # TODO: think if this is the right place for this
+        # probably wants to go in spectraction.py really
+        linearStagePosition = getLinearStagePosition(inputExp)
+        overrideDict['DISTANCE2CCD'] = linearStagePosition
+
+        target = inputExp.getMetadata()['OBJECT']
+        if self.config.forceObjectName:
+            self.log.info(f"Forcing target name from {target} to {self.config.forceObjectName}")
+            target = self.config.forceObjectName
+
+        if target in ['FlatField position', 'Park position', 'Test', 'NOTSET']:
+            raise ValueError(f"OBJECT set to {target} - this is not a celestial object!")
+
+        packageDir = getPackageDir('atmospec')
+        configFilename = os.path.join(packageDir, 'config', 'auxtel.ini')
+
+        spectractor = SpectractorShim(configFile=configFilename,
+                                      paramOverrides=overrideDict,
+                                      supplementaryParameters=supplementDict,
+                                      resetParameters=resetParameters)
+
+        if 'astrometricMatch' in inputCentroid:
+            centroid = inputCentroid['centroid']
+        else:  # it's a raw tuple
+            centroid = inputCentroid  # TODO: put this support in the docstring
+
+        spectraction = spectractor.run(inputExp, *centroid, target)
+
+        self.log.info("Finished processing %s" % (dataIdDict))
+        spectraction.dataId = dataIdDict
+        self.makeResultPickleable(spectraction)
+        return pipeBase.Struct(outputSpectraction={'spectraction': spectraction})
+
     def runDataRef(self, dataRef):
         """Run the ProcessStarTask on a ButlerDataRef for a single exposure.
 
@@ -514,7 +605,7 @@ class ProcessStarTask(pipeBase.CmdLineTask):
                 raise RuntimeError(f"Failed to create output dir {outputRoot}")
         expId = dataRef.dataId['expId']
 
-        result = self.run(exposure, outputRoot, expId, sourceCentroid)
+        result = self.runGen2(exposure, outputRoot, expId, sourceCentroid)
         self.log.info("Finished processing %s" % (dataRef.dataId))
 
         result.dataId = dataId
@@ -567,7 +658,7 @@ class ProcessStarTask(pipeBase.CmdLineTask):
         try:
             astromResult = solver.run(sourceCat=icSrc, exposure=exp)
             exp.setFilterLabel(originalFilterLabel)
-        except Exception:
+        except RuntimeError:
             self.log.warn("Solver failed to run completely")
             exp.setFilterLabel(originalFilterLabel)
             return None
@@ -590,7 +681,7 @@ class ProcessStarTask(pipeBase.CmdLineTask):
             lines = f.readlines()
         return [line.strip() for line in lines]
 
-    def run(self, exp, spectractorOutputRoot, expId, sourceCentroid):
+    def runGen2(self, exp, spectractorOutputRoot, expId, sourceCentroid):
         """Calculate the wavelength calibrated 1D spectrum from a postISRCCD.
 
         An outline of the steps in the processing is as follows:
@@ -656,12 +747,7 @@ class ProcessStarTask(pipeBase.CmdLineTask):
 
         # TODO: think if this is the right place for this
         # probably wants to go in spectraction.py really
-        md = exp.getMetadata()
-        linearStagePosition = 115  # this seems to be the rough zero-point for some reason
-        if 'LINSPOS' in md:
-            position = md['LINSPOS']  # linear stage position in mm from CCD, larger->further from CCD
-            if position is not None:
-                linearStagePosition += position
+        linearStagePosition = getLinearStagePosition(exp)
         overrideDict['DISTANCE2CCD'] = linearStagePosition
 
         target = exp.getMetadata()['OBJECT']
@@ -680,7 +766,7 @@ class ProcessStarTask(pipeBase.CmdLineTask):
                                           paramOverrides=overrideDict,
                                           supplementaryParameters=supplementDict,
                                           resetParameters=resetParameters)
-            result = spectractor.run(exp, *sourceCentroid, target, spectractorOutputRoot, expId)
+            result = spectractor.run(exp, *sourceCentroid, target, spectractorOutputRoot)
         else:
             try:  # need a try here so that the context manager always exits cleanly so plots always written
                 with PdfPages(pdfPath) as pdf:  # TODO: Doesn't the try need to be inside the with?!
@@ -690,7 +776,7 @@ class ProcessStarTask(pipeBase.CmdLineTask):
                                                   supplementaryParameters=supplementDict,
                                                   resetParameters=resetParameters)
 
-                    result = spectractor.run(exp, *sourceCentroid, target, spectractorOutputRoot, expId)
+                    result = spectractor.run(exp, *sourceCentroid, target, spectractorOutputRoot)
             except Exception as e:
                 self.log.warn(f"Caught exception {e}, passing here so pdf can be written to {pdfPath}")
                 result = None
