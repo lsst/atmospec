@@ -264,7 +264,7 @@ class ProcessStarTask(pipeBase.CmdLineTask):
 
     def __init__(self, *, butler=None, psfRefObjLoader=None, **kwargs):
         # TODO: rename psfRefObjLoader to refObjLoader
-        super().__init__()
+        super().__init__(**kwargs)
         self.makeSubtask("isr")
         self.makeSubtask("charImage", butler=butler, refObjLoader=psfRefObjLoader)
 
