@@ -27,16 +27,14 @@ import lsst.afw.geom as afwGeom
 import lsst.geom as geom
 # from lsst.afw.cameraGeom import PIXELS, FOCAL_PLANE  XXX remove if unneeded
 from lsst.obs.lsst.translators.lsst import FILTER_DELIMITER
+from lsst.obs.lsst.translators.latiss import AUXTEL_LOCATION
 
 import astropy
 import astropy.units as u
 from astropy.time import Time
-from astropy.coordinates import SkyCoord, EarthLocation, AltAz, Distance
+from astropy.coordinates import SkyCoord, AltAz, Distance
 from astroquery.simbad import Simbad
 from astroquery.vizier import Vizier
-
-
-AUXTEL_LOCATION = EarthLocation(lat=-30.244639*u.deg, lon=-70.749417*u.deg, height=2663*u.m)
 
 
 def makeGainFlat(exposure, gainDict, invertGains=False):
