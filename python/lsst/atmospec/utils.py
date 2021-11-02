@@ -25,6 +25,8 @@ import lsst.afw.image as afwImage
 import lsst.log as lsstLog
 import lsst.afw.geom as afwGeom
 import lsst.geom as geom
+import lsst.daf.persistence as dafPersist
+import lsst.daf.butler as dafButler
 # from lsst.afw.cameraGeom import PIXELS, FOCAL_PLANE  XXX remove if unneeded
 from lsst.obs.lsst.translators.lsst import FILTER_DELIMITER
 from lsst.obs.lsst.translators.latiss import AUXTEL_LOCATION
@@ -453,7 +455,23 @@ def isDispersedExp(exp):
 
 def isDispersedDataId(dataId, butler):
     """Check if a dataId corresponds to a dispersed image."""
-    filterFullName = butler.queryMetadata('raw', 'filter', **dataId)[0]
+    if isinstance(butler, dafButler.Butler):
+        assert 'day_obs' in dataId or 'exposure.day_obs' in dataId, f'failed to find day_obs in {dataId}'
+        assert 'seq_num' in dataId or 'exposure.seq_num' in dataId, f'failed to find seq_num in {dataId}'
+        seq_num = dataId['seq_num'] if 'seq_num' in dataId else dataId['exposure.seq_num']
+        day_obs = dataId['day_obs'] if 'day_obs' in dataId else dataId['exposure.day_obs']
+        where = "exposure.day_obs=day_obs AND exposure.seq_num=seq_num"
+        expRecords = butler.registry.queryDimensionRecords("exposure", where=where,
+                                                           bind={'day_obs': day_obs,
+                                                                 'seq_num': seq_num})
+        expRecords = set(expRecords)
+        assert len(expRecords) == 1, f'Found more than one exposure record for {dataId}'
+        filterFullName = expRecords.pop().physical_filter
+
+    elif isinstance(butler, dafPersist.Butler):
+        filterFullName = butler.queryMetadata('raw', 'filter', **dataId)[0]
+    else:
+        raise RuntimeError(f'Expected a butler, got {type(butler)}')
     if FILTER_DELIMITER not in filterFullName:
         raise RuntimeError(f"Error parsing filter name {filterFullName}")
     filt, grating = filterFullName.split(FILTER_DELIMITER)
