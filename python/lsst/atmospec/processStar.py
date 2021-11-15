@@ -35,6 +35,7 @@ from lsst.ip.isr import IsrTask
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
 import lsst.pipe.base.connectionTypes as cT
+from lsst.pipe.base.task import TaskError
 
 from lsst.utils import getPackageDir
 from lsst.pipe.tasks.characterizeImage import CharacterizeImageTask
@@ -658,7 +659,7 @@ class ProcessStarTask(pipeBase.CmdLineTask):
         try:
             astromResult = solver.run(sourceCat=icSrc, exposure=exp)
             exp.setFilterLabel(originalFilterLabel)
-        except RuntimeError:
+        except (RuntimeError, TaskError):
             self.log.warn("Solver failed to run completely")
             exp.setFilterLabel(originalFilterLabel)
             return None
