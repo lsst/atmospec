@@ -25,7 +25,6 @@ import lsst.pipe.base as pipeBase
 from lsst.meas.algorithms import LoadIndexedReferenceObjectsTask, MagnitudeLimit, ReferenceObjectLoader
 from lsst.meas.astrom import AstrometryTask, FitAffineWcsTask
 from lsst.pipe.tasks.quickFrameMeasurement import (QuickFrameMeasurementTask)
-from lsst.pipe.base.task import TaskError
 import lsst.pipe.base.connectionTypes as cT
 import lsst.pex.config as pexConfig
 
@@ -153,7 +152,7 @@ class SingleStarCentroidTask(pipeBase.PipelineTask):
             inputExp.setFilterLabel(originalFilterLabel)
             if scatter < 1:
                 successfulFit = True
-        except (RuntimeError, TaskError):
+        except RuntimeError:
             self.log.warn("Solver failed to run completely")
             inputExp.setFilterLabel(originalFilterLabel)
 
