@@ -479,9 +479,8 @@ class ProcessStarTask(pipeBase.PipelineTask):
 
         inputs['dataIdDict'] = inputRefs.inputExp.dataId.byName()
 
-        outputs = self.run(**inputs)  # noqa F841 - remove noqa with DM-30966 below
-        # TODO: DM-30966 Make this output Gen3 serializable
-        # butlerQC.put(outputs, outputRefs)  # uncomment after DM-30966
+        outputs = self.run(**inputs)
+        butlerQC.put(outputs, outputRefs)
 
     def run(self, *, inputExp, inputCentroid, dataIdDict):
         starNames = self.loadStarNames()
@@ -531,9 +530,9 @@ class ProcessStarTask(pipeBase.PipelineTask):
         spectraction = spectractor.run(inputExp, *centroid, target)
 
         self.log.info("Finished processing %s" % (dataIdDict))
-        spectraction.dataId = dataIdDict
-        self.makeResultPickleable(spectraction)
-        return pipeBase.Struct(outputSpectraction={'spectraction': spectraction})
+
+        return pipeBase.Struct(spectractorSpectrum=spectraction.spectrum,
+                               spectractorImage=spectraction.image)
 
     def runDataRef(self, dataRef):
         """Run the ProcessStarTask on a ButlerDataRef for a single exposure.
