@@ -19,7 +19,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-__all__ = ['SpectractorSpectrumFormatter', 'ImageFormatter']
+__all__ = ['SpectractorSpectrumFormatter', 'SpectractorImageFormatter']
 
 from lsst.daf.butler.formatters.file import FileFormatter
 from spectractor.extractor.spectrum import Spectrum
@@ -35,3 +35,14 @@ class SpectractorSpectrumFormatter(FileFormatter):
 
     def _writeFile(self, inMemoryDataset):
         inMemoryDataset.save_spectrum(self.fileDescriptor.location.path)
+
+
+class SpectractorImageFormatter(FileFormatter):
+    extension = '.fits'
+    unsupportedParameters = None
+
+    def _readFile(self, path, pytype=None):
+        return Image(path)
+
+    def _writeFile(self, inMemoryDataset):
+        inMemoryDataset.save_image(self.fileDescriptor.location.path)
