@@ -19,13 +19,14 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-__all__ = ['SpectrumFormatter']
+__all__ = ['SpectractorSpectrumFormatter', 'ImageFormatter']
 
 from lsst.daf.butler.formatters.file import FileFormatter
 from spectractor.extractor.spectrum import Spectrum
+from spectractor.extractor.images import Image
 
 
-class SpectrumFormatter(FileFormatter):
+class SpectractorSpectrumFormatter(FileFormatter):
     extension = '.fits'
     unsupportedParameters = None
 
