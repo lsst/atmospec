@@ -253,14 +253,13 @@ class ProcessStarTaskConfig(pipeBase.PipelineTaskConfig,
         self.isr.overscan.fitType = 'MEDIAN_PER_ROW'
 
 
-class ProcessStarTask(pipeBase.CmdLineTask):
+class ProcessStarTask(pipeBase.PipelineTask):
     """Task for the spectral extraction of single-star dispersed images.
 
     For a full description of how this tasks works, see the run() method.
     """
 
     ConfigClass = ProcessStarTaskConfig
-    RunnerClass = pipeBase.ButlerInitializedTaskRunner
     _DefaultName = "processStar"
 
     def __init__(self, *, butler=None, psfRefObjLoader=None, **kwargs):
