@@ -80,13 +80,13 @@ class ProcessStarTaskConnections(pipeBase.PipelineTaskConnections,
         multiple=False,
     )
     spectractorSpectrum = cT.Output(
-        name="spectractorSpectrumTEST",  # XXX: make this the real thing once it works
+        name="spectractorSpectrum",
         doc="The Spectractor output spectrum.",
         storageClass="SpectractorSpectrum",
         dimensions=("instrument", "visit", "detector"),
     )
     spectractorImage = cT.Output(
-        name="spectractorImageTEST",  # XXX: make this the real thing once it works
+        name="spectractorImage",
         doc="The Spectractor output image.",
         storageClass="SpectractorImage",
         dimensions=("instrument", "visit", "detector"),
