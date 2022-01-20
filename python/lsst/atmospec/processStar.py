@@ -272,7 +272,7 @@ class ProcessStarTask(pipeBase.PipelineTask):
         # TODO: rename psfRefObjLoader to refObjLoader
         super().__init__(**kwargs)
         self.makeSubtask("isr")
-        self.makeSubtask("charImage", butler=butler, refObjLoader=psfRefObjLoader)
+        self.makeSubtask("charImage", butler=butler, refObjLoader=psfRefObjLoader)  # see if I can set this to None directly here
 
         self.debug = lsstDebug.Info(__name__)
         if self.debug.enabled:
