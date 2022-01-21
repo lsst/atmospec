@@ -79,10 +79,16 @@ class ProcessStarTaskConnections(pipeBase.PipelineTaskConnections,
         dimensions=("instrument", "visit", "detector"),
         multiple=False,
     )
-    outputSpectraction = cT.Output(
-        name="spectractorTestOutput",  # TODO: make this the real thing once it works
-        doc="The Spectractor output structure.",
-        storageClass="StructuredDataDict",
+    spectractorSpectrum = cT.Output(
+        name="spectractorSpectrum",
+        doc="The Spectractor output spectrum.",
+        storageClass="SpectractorSpectrum",
+        dimensions=("instrument", "visit", "detector"),
+    )
+    spectractorImage = cT.Output(
+        name="spectractorImage",
+        doc="The Spectractor output image.",
+        storageClass="SpectractorImage",
         dimensions=("instrument", "visit", "detector"),
     )
 
@@ -253,21 +259,20 @@ class ProcessStarTaskConfig(pipeBase.PipelineTaskConfig,
         self.isr.overscan.fitType = 'MEDIAN_PER_ROW'
 
 
-class ProcessStarTask(pipeBase.CmdLineTask):
+class ProcessStarTask(pipeBase.PipelineTask):
     """Task for the spectral extraction of single-star dispersed images.
 
     For a full description of how this tasks works, see the run() method.
     """
 
     ConfigClass = ProcessStarTaskConfig
-    RunnerClass = pipeBase.ButlerInitializedTaskRunner
     _DefaultName = "processStar"
 
-    def __init__(self, *, butler=None, psfRefObjLoader=None, **kwargs):
+    def __init__(self, *, butler=None, **kwargs):
         # TODO: rename psfRefObjLoader to refObjLoader
         super().__init__(**kwargs)
         self.makeSubtask("isr")
-        self.makeSubtask("charImage", butler=butler, refObjLoader=psfRefObjLoader)
+        self.makeSubtask("charImage", butler=butler, refObjLoader=None)
 
         self.debug = lsstDebug.Info(__name__)
         if self.debug.enabled:
@@ -474,9 +479,8 @@ class ProcessStarTask(pipeBase.CmdLineTask):
 
         inputs['dataIdDict'] = inputRefs.inputExp.dataId.byName()
 
-        outputs = self.run(**inputs)  # noqa F841 - remove noqa with DM-30966 below
-        # TODO: DM-30966 Make this output Gen3 serializable
-        # butlerQC.put(outputs, outputRefs)  # uncomment after DM-30966
+        outputs = self.run(**inputs)
+        butlerQC.put(outputs, outputRefs)
 
     def run(self, *, inputExp, inputCentroid, dataIdDict):
         starNames = self.loadStarNames()
@@ -526,9 +530,9 @@ class ProcessStarTask(pipeBase.CmdLineTask):
         spectraction = spectractor.run(inputExp, *centroid, target)
 
         self.log.info("Finished processing %s" % (dataIdDict))
-        spectraction.dataId = dataIdDict
-        self.makeResultPickleable(spectraction)
-        return pipeBase.Struct(outputSpectraction={'spectraction': spectraction})
+
+        return pipeBase.Struct(spectractorSpectrum=spectraction.spectrum,
+                               spectractorImage=spectraction.image)
 
     def runDataRef(self, dataRef):
         """Run the ProcessStarTask on a ButlerDataRef for a single exposure.
