@@ -31,9 +31,10 @@ from spectractor.config import load_config  # noqa: E402
 from spectractor.extractor.images import Image, find_target, turn_image  # noqa: E402
 
 from spectractor.extractor.dispersers import Hologram  # noqa: E402
-from spectractor.extractor.extractor import (set_fast_mode, FullForwardModelFitWorkspace,  # noqa: E402
+from spectractor.extractor.extractor import (FullForwardModelFitWorkspace,  # noqa: E402
                                              plot_comparison_truth, run_ffm_minimisation,  # noqa: E402
-                                             extract_spectrum_from_image)
+                                             extract_spectrum_from_image,
+                                             run_spectrogram_deconvolution_psf2d)
 from spectractor.extractor.spectrum import Spectrum, calibrate_spectrum  # noqa: E402
 
 import lsst.log as lsstLog  # noqa: E402
@@ -342,8 +343,9 @@ class SpectractorShim():
         if self.TRANSPOSE:
             xpos, ypos = self.transposeCentroid(xpos, ypos, image)
 
+        image.target_guess = (xpos, ypos)
         if parameters.DEBUG:
-            image.plot_image(scale='log10', target_pixcoords=(xpos, ypos))
+            image.plot_image(scale='log10', target_pixcoords=image.target_guess)
             self.log.info(f"Pixel value at centroid = {image.data[int(ypos), int(xpos)]}")
 
         # XXX this needs removing or at least dealing with to not always
@@ -357,8 +359,7 @@ class SpectractorShim():
         if parameters.CCD_REBIN > 1:
             self.log.info(f'Rebinning image with rebin of {parameters.CCD_REBIN}')
             # TODO: Fix bug here where the passed parameter isn't used!
-            image.target_guess = (xpos, ypos)
-            image = set_fast_mode(image)
+            image.rebin()
             if parameters.DEBUG:
                 image.plot_image(scale='symlog', target_pixcoords=image.target_guess)
 
@@ -380,15 +381,22 @@ class SpectractorShim():
             raise NotImplementedError
 
         # Create Spectrum object
-        spectrum = Spectrum(image=image)
+        spectrum = Spectrum(image=image, order=parameters.SPEC_ORDER)  # XXX new in DM-33589 check SPEC_ORDER
         self.setAdrParameters(spectrum, exp)
 
         # Subtract background and bad pixels
-        extract_spectrum_from_image(image, spectrum, signal_width=parameters.PIXWIDTH_SIGNAL,
-                                    ws=(parameters.PIXDIST_BACKGROUND,
-                                        parameters.PIXDIST_BACKGROUND + parameters.PIXWIDTH_BACKGROUND),
-                                    right_edge=parameters.CCD_IMSIZE)  # MFL: this used to be CCD_IMSIZE-200
+        w_psf1d, bgd_model_func = extract_spectrum_from_image(image, spectrum,
+                                                              signal_width=parameters.PIXWIDTH_SIGNAL,
+                                                              ws=(parameters.PIXDIST_BACKGROUND,
+                                                                  parameters.PIXDIST_BACKGROUND
+                                                                  + parameters.PIXWIDTH_BACKGROUND),
+                                                              right_edge=parameters.CCD_IMSIZE)
         spectrum.atmospheric_lines = atmospheric_lines
+
+        # PSF2D deconvolution
+        if parameters.SPECTRACTOR_DECONVOLUTION_PSF2D:
+            run_spectrogram_deconvolution_psf2d(spectrum, bgd_model_func=bgd_model_func)
+
         # Calibrate the spectrum
         with_adr = True
         if parameters.OBS_OBJECT_TYPE != "STAR":
