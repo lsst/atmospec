@@ -38,6 +38,7 @@ from spectractor.extractor.extractor import (FullForwardModelFitWorkspace,  # no
 from spectractor.extractor.spectrum import Spectrum, calibrate_spectrum  # noqa: E402
 
 import lsst.log as lsstLog  # noqa: E402
+from lsst.daf.base import DateTime  # noqa: E402
 from lsst.obs.lsst.translators.lsst import FILTER_DELIMITER  # noqa: E402
 
 
@@ -206,7 +207,7 @@ class SpectractorShim():
                 vi = exp.getInfo().getVisitInfo()
                 image.header.airmass = vi.getBoresightAirmass()  # currently returns nan for obs_ctio0m9
                 image.airmass = vi.getBoresightAirmass()  # currently returns nan for obs_ctio0m9
-
+                image.date_obs = vi.date.toString(DateTime.UTC)  # should this be UTC or TAI?
             else:
                 md = exp.getMetadata().toDict()
                 image.header.airmass = md['AIRMASS']
