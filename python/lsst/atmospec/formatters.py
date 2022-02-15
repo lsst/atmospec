@@ -31,7 +31,7 @@ class SpectractorSpectrumFormatter(FileFormatter):
     unsupportedParameters = None
 
     def _readFile(self, path, pytype=None):
-        return Spectrum(path)
+        return Spectrum(path, fast_load=True)
 
     def _writeFile(self, inMemoryDataset):
         inMemoryDataset.save_spectrum(self.fileDescriptor.location.path)
