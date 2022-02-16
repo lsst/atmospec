@@ -422,13 +422,6 @@ class SpectractorShim():
         # Save the spectrum
         self._ensureFitsHeader(spectrum)  # SIMPLE is missing by default
 
-        # Spectractor calls these here:
-        # spectrum.save_spectrum(output_filename, overwrite=True)
-        # spectrum.save_spectrogram(output_filename_spectrogram, overwrite=True)
-        # spectrum.lines.print_detected_lines(output_file_name=output_filename.replace(
-        # '_spectrum.fits', '_lines.csv'),
-        # overwrite=True, amplitude_units=spectrum.units)
-
         # Plot the spectrum
         parameters.DISPLAY = True
         if parameters.VERBOSE and parameters.DISPLAY:
