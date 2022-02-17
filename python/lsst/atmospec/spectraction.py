@@ -207,7 +207,8 @@ class SpectractorShim():
                 vi = exp.getInfo().getVisitInfo()
                 image.header.airmass = vi.getBoresightAirmass()  # currently returns nan for obs_ctio0m9
                 image.airmass = vi.getBoresightAirmass()  # currently returns nan for obs_ctio0m9
-                image.date_obs = vi.date.toString(DateTime.UTC)  # should this be UTC or TAI?
+                # TODO: DM-33731 work out if this should be UTC or TAI.
+                image.date_obs = vi.date.toString(DateTime.UTC)
             else:
                 md = exp.getMetadata().toDict()
                 image.header.airmass = md['AIRMASS']
