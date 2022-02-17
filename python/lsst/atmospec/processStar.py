@@ -91,6 +91,12 @@ class ProcessStarTaskConnections(pipeBase.PipelineTaskConnections,
         storageClass="SpectractorImage",
         dimensions=("instrument", "visit", "detector"),
     )
+    spectraction = cT.Output(
+        name="spectraction",
+        doc="The Spectractor output image.",
+        storageClass="Spectraction",
+        dimensions=("instrument", "visit", "detector"),
+    )
 
     def __init__(self, *, config=None):
         super().__init__(config=config)
@@ -531,8 +537,11 @@ class ProcessStarTask(pipeBase.PipelineTask):
 
         self.log.info("Finished processing %s" % (dataIdDict))
 
+        self.makeResultPickleable(spectraction)
+
         return pipeBase.Struct(spectractorSpectrum=spectraction.spectrum,
-                               spectractorImage=spectraction.image)
+                               spectractorImage=spectraction.image,
+                               spectraction=spectraction)
 
     def runDataRef(self, dataRef):
         """Run the ProcessStarTask on a ButlerDataRef for a single exposure.

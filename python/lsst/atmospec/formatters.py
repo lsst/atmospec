@@ -22,6 +22,7 @@
 __all__ = ['SpectractorSpectrumFormatter', 'SpectractorImageFormatter']
 
 from lsst.daf.butler.formatters.file import FileFormatter
+from lsst.daf.butler.formatters.pickle import PickleFormatter
 from spectractor.extractor.spectrum import Spectrum
 from spectractor.extractor.images import Image
 
@@ -46,3 +47,7 @@ class SpectractorImageFormatter(FileFormatter):
 
     def _writeFile(self, inMemoryDataset):
         inMemoryDataset.save_image(self.fileDescriptor.location.path)
+
+
+class SpectractionFormatter(PickleFormatter):
+    pass
