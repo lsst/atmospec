@@ -35,8 +35,6 @@ import astropy
 import astropy.units as u
 from astropy.time import Time
 from astropy.coordinates import SkyCoord, AltAz, Distance
-from astroquery.simbad import Simbad
-from astroquery.vizier import Vizier
 
 
 def makeGainFlat(exposure, gainDict, invertGains=False):
@@ -377,6 +375,10 @@ def simbadLocationForTarget(target):
     ValueError
         If object not found, or if multiple entries for the object are found.
     """
+    # do not import at the module level - tests crash due to a race
+    # condition with directory creation
+    from astroquery.simbad import Simbad
+
     obj = Simbad.query_object(target)
     if not obj:
         raise ValueError(f"Found failed to find {target} in simbad!")
@@ -413,6 +415,9 @@ def vizierLocationForTarget(exp, target, doMotionCorrection):
         If object not found in Hipparcos2 via Vizier.
         This is quite common, even for bright objects.
     """
+    # do not import at the module level - tests crash due to a race
+    # condition with directory creation
+    from astroquery.vizier import Vizier
 
     result = Vizier.query_object(target)  # result is an empty table list for an unknown target
     try:
