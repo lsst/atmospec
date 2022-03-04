@@ -37,13 +37,18 @@ __all__ = [
 
 import logging
 import numpy as np
+import logging
+import sys
 import lsst.afw.math as afwMath
 import lsst.afw.image as afwImage
+from lsst.ctrl.mpexec import SimplePipelineExecutor
 import lsst.afw.geom as afwGeom
 import lsst.geom as geom
 import lsst.daf.butler as dafButler
 from astro_metadata_translator import ObservationInfo
 # from lsst.afw.cameraGeom import PIXELS, FOCAL_PLANE  XXX remove if unneeded
+import lsst.pex.config as pexConfig
+from lsst.pipe.base import Pipeline
 from lsst.obs.lsst.translators.lsst import FILTER_DELIMITER
 
 import astropy
@@ -507,3 +512,91 @@ def getLinearStagePosition(exp):
         if position is not None:
             linearStagePosition += position
     return linearStagePosition
+
+
+def runNotebook(dataId, outputCollection, taskConfigs={}, configOptions={}):
+    """Run the ProcessStar pipeline for a single dataId, writing to the
+    specified output collection.
+
+    This is a convenience function to allow running single dataIds in notebooks
+    so that plots can be inspected easily. This is not designed for bulk data
+    reductions.
+
+    Parameters
+    ----------
+    dataId : `dict`
+        The dataId to run.
+    outputCollection : `str`, optional
+        Output collection name.
+    taskConfigs : `dict` [`lsst.pipe.base.PipelineTaskConfig`], optional
+        Dictionary of config config classes. The key of the ``taskConfigs``
+        dict is the relevant task label. The value of ``taskConfigs``
+        is a task config object to apply. See notes for ignored items.
+    configOptions : `dict` [`dict`], optional
+        Dictionary of individual config options. The key of the
+        ``configOptions`` dict is the relevant task label. The value
+        of ``configOptions`` is another dict that contains config
+        key/value overrides to apply.
+
+    Returns
+    -------
+    spectraction : `lsst.atmospec.spectraction.Spectraction`
+        The extracted spectraction object.
+
+    Notes
+    -----
+    Any ConfigurableInstances in supplied task config overrides will be
+    ignored. Currently (see DM-XXXXX) this causes a RecursionError.
+    """
+    import lsst.rapid.analysis.butlerUtils as butlerUtils
+
+    def makeQuery(dataId):
+        dayObs = butlerUtils.getDayObs(dataId)
+        seqNum = butlerUtils.getSeqNum(dataId)
+        queryString = (f"exposure.day_obs={dayObs} AND "
+                       f"exposure.seq_num={seqNum} AND "
+                       "instrument='LATISS'")
+
+        return queryString
+    repo = '/repo/main'
+
+    butler = SimplePipelineExecutor.prep_butler(repo,
+                                                inputs=['LATISS/raw/all',
+                                                        'refcats',
+                                                        'LATISS/calib',
+                                                        'LATISS/calib/DM-32209'],
+                                                output=outputCollection)
+
+    pipeline = Pipeline.fromFile("${ATMOSPEC_DIR}/pipelines/processStar.yaml")
+
+    for taskName, configClass in taskConfigs.items():
+        for option, value in configClass.items():
+            # connections require special treatment
+            if isinstance(value, configClass.ConnectionsConfigClass):
+                for connectionOption, connectionValue in value.items():
+                    pipeline.addConfigOverride(taskName,
+                                               f'{option}.{connectionOption}',
+                                               connectionValue)
+            # ConfigurableInstance has to be done with .retarget()
+            elif not isinstance(value, pexConfig.ConfigurableInstance):
+                pipeline.addConfigOverride(taskName, option, value)
+
+    for taskName, configDict in configOptions.items():
+        for option, value in configDict.items():
+            # ConfigurableInstance has to be done with .retarget()
+            if not isinstance(value, pexConfig.ConfigurableInstance):
+                pipeline.addConfigOverride(taskName, option, value)
+
+    query = makeQuery(dataId)
+    executor = SimplePipelineExecutor.from_pipeline(pipeline,
+                                                    where=query,
+                                                    root=repo,
+                                                    butler=butler)
+
+    logging.basicConfig(level=logging.INFO, stream=sys.stdout)
+    quanta = executor.run()
+
+    butler = butlerUtils.makeDefaultLatissButler('NCSA', extraCollections=[outputCollection])
+    spectractionQuantum = quanta[3]
+    result = butler.get(spectractionQuantum.outputs['spectraction'][0])
+    return result
