@@ -382,7 +382,7 @@ class ProcessStarTaskConfig(pipeBase.PipelineTaskConfig,
         default=1,
     )
     psfType = pexConfig.ChoiceField(
-        dtype=int,
+        dtype=str,
         doc="The PSF model type to use. "
         "PSF_TYPE internally.",
         default="Moffat",
