@@ -231,40 +231,40 @@ class ProcessStarTaskConfig(pipeBase.PipelineTaskConfig,
         dtype=int,
         doc="Rebinning factor to use on the input image, in pixels. "
         "CCD_REBIN internally.",
-        default=1,
+        default=4,  # XXX Change to 1, but a value of 1 causes a weird crash!
     )
     xWindow = pexConfig.Field(
         dtype=int,
         doc="Window x size to search for the target object. Ignored if targetCentroidMethod in ('exact, wcs')"
         "XWINDOW internally.",
-        default=100,
+        default=50,
     )
     yWindow = pexConfig.Field(
         dtype=int,
         doc="Window y size to search for the targeted object. Ignored if targetCentroidMethod in "
         "('exact, wcs')"
         "YWINDOW internally.",
-        default=100,
+        default=50,
     )
     xWindowRotated = pexConfig.Field(
         dtype=int,
         doc="Window x size to search for the target object in the rotated image. "
         "Ignored if rotationAngleMethod=False"
         "XWINDOW_ROT internally.",
-        default=50,
+        default=25,
     )
     yWindowRotated = pexConfig.Field(
         dtype=int,
         doc="Window y size to search for the target object in the rotated image. "
         "Ignored if rotationAngleMethod=False"
         "YWINDOW_ROT internally.",
-        default=50,
+        default=25,
     )
     pixelShiftPrior = pexConfig.Field(
         dtype=float,
         doc="Prior on the reliability of the centroid estimate in pixels. "
         "PIXSHIFT_PRIOR internally.",
-        default=1,
+        default=5,
         # XXX make this strictly greater than 0
     )
     doFilterRotatedImage = pexConfig.Field(
@@ -308,7 +308,7 @@ class ProcessStarTaskConfig(pipeBase.PipelineTaskConfig,
         dtype=bool,
         doc="Set spectractor debug mode? "
         "DEBUG internally.",
-        default=False,
+        default=True,
     )
     spectractorDebugLogging = pexConfig.Field(
         dtype=bool,
@@ -338,7 +338,7 @@ class ProcessStarTaskConfig(pipeBase.PipelineTaskConfig,
         dtype=float,
         doc="Step size for the wavelength array (in nm). "
         "LAMBDA_STEP internally.",
-        default=0.2,
+        default=1,
     )
     spectralOrder = pexConfig.ChoiceField(
         dtype=int,
@@ -356,25 +356,25 @@ class ProcessStarTaskConfig(pipeBase.PipelineTaskConfig,
         dtype=int,
         doc="Half transverse width of the signal rectangular window in pixels. "
         "PIXWIDTH_SIGNAL internally.",
-        default=10,
+        default=20,
     )
     backgroundDistance = pexConfig.Field(
         dtype=int,
         doc="Distance from dispersion axis to analyse the background in pixels. "
         "PIXDIST_BACKGROUND internally.",
-        default=20,
+        default=70,
     )
     backgroundWidth = pexConfig.Field(
         dtype=int,
         doc="Transverse width of the background rectangular window in pixels. "
         "PIXWIDTH_BACKGROUND internally.",
-        default=10,
+        default=20,
     )
     backgroundBoxSize = pexConfig.Field(
         dtype=int,
         doc="Box size for sextractor evaluation of the background. "
         "PIXWIDTH_BOXSIZE internally.",
-        default=20,
+        default=10,
     )
     backgroundOrder = pexConfig.Field(
         dtype=int,
@@ -402,14 +402,14 @@ class ProcessStarTaskConfig(pipeBase.PipelineTaskConfig,
         dtype=float,
         doc="Regularisation parameter for the chisq minimisation to extract the spectrum. "
         "PSF_FIT_REG_PARAM internally.",
-        default=0.01,
+        default=1,
         # XXX allowed range strictly positive
     )
     psfTransverseStepSize = pexConfig.Field(
         dtype=int,
         doc="Step size in pixels for the first transverse PSF1D fit. "
         "PSF_PIXEL_STEP_TRANSVERSE_FIT internally.",
-        default=10,
+        default=25,
     )
     psfFwhmClip = pexConfig.Field(
         dtype=float,
@@ -433,7 +433,7 @@ class ProcessStarTaskConfig(pipeBase.PipelineTaskConfig,
         dtype=int,
         doc="Size of the peak sides to use to fit spectrum base line. "
         "CALIB_BGD_WIDTH internally.",
-        default=10,
+        default=15,
     )
     calibSavgolWindow = pexConfig.Field(
         dtype=int,
