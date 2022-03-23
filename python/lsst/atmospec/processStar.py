@@ -198,6 +198,7 @@ class ProcessStarTaskConfig(pipeBase.PipelineTaskConfig,
         "SPECTRACTOR_FIT_TARGET_CENTROID internally.",
         default="fit",
         allowed={
+            # TODO: probably want an "auto" mode
             "exact": "Use a given input value as source of truth.",  # XXX MFL: translate this to "guess"
             "fit": "Fit a 2d Moffat model to the target.",
             "WCS": "Use the target's catalog location and the image's wcs.",
