@@ -28,13 +28,14 @@ from astropy import units as u
 from spectractor import parameters
 parameters.CALLING_CODE = "LSST_DM"  # this must be set IMMEDIATELY to supress colored logs
 
-from spectractor.config import load_config  # noqa: E402
+from spectractor.config import load_config, apply_rebinning_to_parameters  # noqa: E402
 from spectractor.extractor.images import Image, find_target, turn_image  # noqa: E402
 
 from spectractor.extractor.dispersers import Hologram  # noqa: E402
 from spectractor.extractor.extractor import (FullForwardModelFitWorkspace,  # noqa: E402
                                              run_ffm_minimisation,  # noqa: E402
                                              extract_spectrum_from_image,
+                                             dumpParameters,
                                              run_spectrogram_deconvolution_psf2d)
 from spectractor.extractor.spectrum import Spectrum, calibrate_spectrum  # noqa: E402
 
@@ -54,7 +55,7 @@ class SpectractorShim:
                  resetParameters=None):
         if configFile:
             print(f"Loading config from {configFile}")
-            load_config(configFile)
+            load_config(configFile, rebin=False)
         self.log = logging.getLogger(__name__)
         if paramOverrides is not None:
             self.overrideParameters(paramOverrides)
@@ -62,6 +63,16 @@ class SpectractorShim:
             self.supplementParameters(supplementaryParameters)
         if resetParameters is not None:
             self.resetParameters(resetParameters)
+
+        if parameters.DEBUG:
+            print('Pre-rebinning:')
+            dumpParameters()
+
+        apply_rebinning_to_parameters()
+
+        if parameters.DEBUG:
+            print('Post-rebinning:')
+            dumpParameters()
         return
 
     def overrideParameters(self, overrides):
@@ -347,7 +358,7 @@ class SpectractorShim:
 
         image.target_guess = (xpos, ypos)
         if parameters.DEBUG:
-            image.plot_image(scale='log10', target_pixcoords=image.target_guess)
+            image.plot_image(scale='symlog', target_pixcoords=image.target_guess)
             self.log.info(f"Pixel value at centroid = {image.data[int(ypos), int(xpos)]}")
 
         # XXX this needs removing or at least dealing with to not always
@@ -383,7 +394,7 @@ class SpectractorShim:
             raise NotImplementedError
 
         # Create Spectrum object
-        spectrum = Spectrum(image=image, order=parameters.SPEC_ORDER)  # XXX new in DM-33589 check SPEC_ORDER
+        spectrum = Spectrum(image=image, order=parameters.SPEC_ORDER)
         self.setAdrParameters(spectrum, exp)
 
         # Subtract background and bad pixels
@@ -400,6 +411,7 @@ class SpectractorShim:
             run_spectrogram_deconvolution_psf2d(spectrum, bgd_model_func=bgd_model_func)
 
         # Calibrate the spectrum
+        self.log.info(f'Calibrating order {spectrum.order:d} spectrum...')
         with_adr = True
         if parameters.OBS_OBJECT_TYPE != "STAR":
             # XXX Check what this is set to, and how
