@@ -196,10 +196,11 @@ class ProcessStarTaskConfig(pipeBase.PipelineTaskConfig,
         dtype=str,
         doc="Method to get target centroid. "
         "SPECTRACTOR_FIT_TARGET_CENTROID internally.",
-        default="fit",
+        default="guess",
         allowed={
             # TODO: probably want an "auto" mode
-            "exact": "Use a given input value as source of truth.",  # XXX MFL: translate this to "guess"
+            # XXX MFL: probably want to rename "guess" to "exact" for DM.
+            "guess": "Use a given input value as source of truth.",
             "fit": "Fit a 2d Moffat model to the target.",
             "WCS": "Use the target's catalog location and the image's wcs.",
         }
@@ -783,7 +784,7 @@ class ProcessStarTask(pipeBase.PipelineTask):
 
             # Hard-coded parameters
             'OBS_NAME': 'AUXTEL',
-            'CCD_IMSIZE': 4096,
+            'CCD_IMSIZE': 4000,  # short axis - we trim the CCD to square
             'CCD_MAXADU': 170000,  # XXX need to set this from camera value
             'CCD_GAIN': 1.1,  # set programatically later, this is default nominal value
             'OBS_NAME': 'AUXTEL',
@@ -791,7 +792,6 @@ class ProcessStarTask(pipeBase.PipelineTask):
             'OBS_LATITUDE': -30.2446389756252,  # XXX get this from / check with utils value
             'OBS_DIAMETER': 1.20,
             'OBS_EPOCH': "J2000.0",
-            'OBS_CAMERA_ROTATION': 0,
             'OBS_CAMERA_DEC_FLIP_SIGN': 1,
             'OBS_CAMERA_RA_FLIP_SIGN': -1,
             'OBS_SURFACE': np.pi * 1.2 ** 2 / 4.,
@@ -803,6 +803,10 @@ class ProcessStarTask(pipeBase.PipelineTask):
                                  self.config.lambdaMax,
                                  self.config.lambdaStep),
             'CALIB_BGD_NPARAMS': self.config.calibBackgroundOrder + 1,
+
+            # Parameters set elsewhere
+            # OBS_CAMERA_ROTATION
+            # DISTANCE2CCD
         }
 
         supplementDict = {'CALLING_CODE': 'LSST_DM',
