@@ -548,7 +548,10 @@ def runNotebook(dataId, outputCollection, taskConfigs={}, configOptions={}):
     Any ConfigurableInstances in supplied task config overrides will be
     ignored. Currently (see DM-XXXXX) this causes a RecursionError.
     """
-    import lsst.rapid.analysis.butlerUtils as butlerUtils
+    # TODO move this to summit.utils to avoid the late import here which
+    # is required to avoid the cirucular import, and for this package to
+    # not depend on utils code.
+    import lsst.summit.utils.butlerUtils as butlerUtils
 
     def makeQuery(dataId):
         dayObs = butlerUtils.getDayObs(dataId)
@@ -560,6 +563,7 @@ def runNotebook(dataId, outputCollection, taskConfigs={}, configOptions={}):
         return queryString
     repo = '/repo/main'
 
+    # TODO: use LATISS_DEFAULT_COLLECTIONS here?
     butler = SimplePipelineExecutor.prep_butler(repo,
                                                 inputs=['LATISS/raw/all',
                                                         'refcats',
@@ -596,7 +600,7 @@ def runNotebook(dataId, outputCollection, taskConfigs={}, configOptions={}):
     logging.basicConfig(level=logging.INFO, stream=sys.stdout)
     quanta = executor.run()
 
-    butler = butlerUtils.makeDefaultLatissButler('NCSA', extraCollections=[outputCollection])
+    butler = butlerUtils.makeDefaultLatissButler(extraCollections=[outputCollection])
     spectractionQuantum = quanta[3]
     result = butler.get(spectractionQuantum.outputs['spectraction'][0])
     return result
