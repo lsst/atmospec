@@ -238,28 +238,28 @@ class ProcessStarTaskConfig(pipeBase.PipelineTaskConfig,
         dtype=int,
         doc="Window x size to search for the target object. Ignored if targetCentroidMethod in ('exact, wcs')"
         "XWINDOW internally.",
-        default=50,
+        default=100,
     )
     yWindow = pexConfig.Field(
         dtype=int,
         doc="Window y size to search for the targeted object. Ignored if targetCentroidMethod in "
         "('exact, wcs')"
         "YWINDOW internally.",
-        default=50,
+        default=100,
     )
     xWindowRotated = pexConfig.Field(
         dtype=int,
         doc="Window x size to search for the target object in the rotated image. "
         "Ignored if rotationAngleMethod=False"
         "XWINDOW_ROT internally.",
-        default=25,
+        default=50,
     )
     yWindowRotated = pexConfig.Field(
         dtype=int,
         doc="Window y size to search for the target object in the rotated image. "
         "Ignored if rotationAngleMethod=False"
         "YWINDOW_ROT internally.",
-        default=25,
+        default=50,
     )
     pixelShiftPrior = pexConfig.Field(
         dtype=float,
@@ -303,7 +303,7 @@ class ProcessStarTaskConfig(pipeBase.PipelineTaskConfig,
         dtype=bool,
         doc="Set verbose mode? "
         "VERBOSE internally.",
-        default=False,
+        default=True,  # sets INFO level logging in Spectractor
     )
     spectractorDebugMode = pexConfig.Field(
         dtype=bool,
@@ -357,13 +357,13 @@ class ProcessStarTaskConfig(pipeBase.PipelineTaskConfig,
         dtype=int,
         doc="Half transverse width of the signal rectangular window in pixels. "
         "PIXWIDTH_SIGNAL internally.",
-        default=20,
+        default=40,
     )
     backgroundDistance = pexConfig.Field(
         dtype=int,
         doc="Distance from dispersion axis to analyse the background in pixels. "
         "PIXDIST_BACKGROUND internally.",
-        default=70,
+        default=140,
     )
     backgroundWidth = pexConfig.Field(
         dtype=int,
@@ -375,7 +375,7 @@ class ProcessStarTaskConfig(pipeBase.PipelineTaskConfig,
         dtype=int,
         doc="Box size for sextractor evaluation of the background. "
         "PIXWIDTH_BOXSIZE internally.",
-        default=10,
+        default=20,
     )
     backgroundOrder = pexConfig.Field(
         dtype=int,
@@ -410,7 +410,7 @@ class ProcessStarTaskConfig(pipeBase.PipelineTaskConfig,
         dtype=int,
         doc="Step size in pixels for the first transverse PSF1D fit. "
         "PSF_PIXEL_STEP_TRANSVERSE_FIT internally.",
-        default=25,
+        default=50,
     )
     psfFwhmClip = pexConfig.Field(
         dtype=float,
