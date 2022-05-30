@@ -343,7 +343,7 @@ class SpectractorShim:
         _temperature = weather.getAirTemperature()
         temperature = _temperature if not np.isnan(_temperature) else 10  # maybe average?
         _pressure = weather.getAirPressure()
-        pressure = _pressure if not np.isnan(_pressure) else 732  # nominal for altitude?
+        pressure = _pressure if not np.isnan(_pressure) else 743  # nominal for altitude?
         _humidity = weather.getHumidity()
         humidity = _humidity if not np.isnan(_humidity) else None  # not a required param so no default
 
