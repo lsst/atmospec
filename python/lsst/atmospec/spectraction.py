@@ -48,7 +48,6 @@ class SpectractorShim:
 
     This is designed to provide an implementation of the top-level function in
     Spectractor.spectractor.extractor.extractor.Spectractor()."""
-    TRANSPOSE = True
 
     # leading * for kwargs only in constructor
     def __init__(self, *, configFile=None, paramOverrides=None, supplementaryParameters=None,
@@ -144,7 +143,16 @@ class SpectractorShim:
             if not item.startswith("__"):
                 print(item, getattr(parameters, item))
 
-    def spectractorImageFromLsstExposure(self, exp, *, target_label='', disperser_label='', filter_label=''):
+    def debugPrintTargetCentroidValue(self, image):
+        x, y = image.target_guess
+        self.log.debug(f"Image shape = {image.data.shape}")
+        self.log.debug(f"x, y = {x}, {y}")
+        x = int(np.round(x))
+        y = int(np.round(y))
+        self.log.debug(f"Value at {x}, {y} = {image.data[y, x]}")
+
+    def spectractorImageFromLsstExposure(self, exp, xpos, ypos, *, target_label='',
+                                         disperser_label='', filter_label=''):
         """Construct a Spectractor Image object from LSST objects.
 
         Internally we try to use functions that calculate things and return
@@ -152,14 +160,21 @@ class SpectractorShim:
         object in place where possible. Where this is not possible the methods
         are labeled _setSomething().
         """
+        # TODO: passing exact centroids seems to be causing a serious
+        # and non-obvious problem!
+        # this needs fixing for several reasons, mostly because if we have a
+        # known good centroid then we want to skip the refitting entirely
+        xpos = int(np.round(xpos))
+        ypos = int(np.round(ypos))
+        self.log.debug(f'DM value at centroid: {exp.image.array[ypos, xpos]}\n')
+
+        # make a blank image, with the filter/disperser set
         image = Image(file_name='', target_label=target_label, disperser_label=disperser_label,
                       filter_label=filter_label)
 
         vi = exp.getInfo().getVisitInfo()
         rotAngle = vi.getBoresightRotAngle().asDegrees()
-        # line below correct if not rotating 90 XXX remove this once resolved
-        # parameters.OBS_CAMERA_ROTATION = 180 - (rotAngle % 360)
-        parameters.OBS_CAMERA_ROTATION = 90 - (rotAngle % 360)
+        parameters.OBS_CAMERA_ROTATION = 270 - (rotAngle % 360)
 
         radec = vi.getBoresightRaDec()
         image.ra = asCoords.Angle(radec.getRa().asDegrees(), unit="deg")
@@ -168,6 +183,14 @@ class SpectractorShim:
         image.hour_angle = asCoords.Angle(ha, unit="deg")
 
         image.data = self._getImageData(exp)
+
+        def _translateCentroid(dmXpos, dmYpos):
+            newX = dmYpos
+            newY = dmXpos
+            return newX, newY
+        image.target_guess = _translateCentroid(xpos, ypos)
+        self.debugPrintTargetCentroidValue(image)
+
         self._setReadNoiseFromExp(image, exp, 1)
         # xxx remove hard coding of 1 below!
         image.gain = self._setGainFromExp(image, exp, .85)  # gain required for calculating stat err
@@ -231,11 +254,12 @@ class SpectractorShim:
 
         return
 
-    def _getImageData(self, exp):
-        if self.TRANSPOSE:
-            # return exp.maskedImage.image.array.T[:, ::-1]
-            return np.rot90(exp.maskedImage.image.array, 1)
-        return exp.maskedImage.image.array
+    def _getImageData(self, exp, trimToSquare=True):
+        if trimToSquare:
+            data = exp.image.array[0:4000, 0:4000]
+        else:
+            data = exp.image.array
+        return data.T[::, ::]
 
     def _setReadNoiseFromExp(self, spectractorImage, exp, constValue=None):
         # xxx need to implement this properly
@@ -286,11 +310,6 @@ class SpectractorShim:
 
     @staticmethod
     def transposeCentroid(dmXpos, dmYpos, image):
-        # xSize, ySize = image.data.shape
-        # newX = dmXpos
-        # newY = ySize - dmYpos  # image is also flipped in Y
-        # return newY, newX
-
         xSize, ySize = image.data.shape
         newX = dmYpos
         newY = xSize - dmXpos
@@ -350,15 +369,14 @@ class SpectractorShim:
         ypos = int(np.round(ypos))
 
         filter_label, disperser = self._getFilterAndDisperserFromExp(exp)
-        image = self.spectractorImageFromLsstExposure(exp, target_label=target, disperser_label=disperser,
+        image = self.spectractorImageFromLsstExposure(exp, xpos, ypos, target_label=target,
+                                                      disperser_label=disperser,
                                                       filter_label=filter_label)
 
-        if self.TRANSPOSE:
-            xpos, ypos = self.transposeCentroid(xpos, ypos, image)
-
-        image.target_guess = (xpos, ypos)
         if parameters.DEBUG:
-            image.plot_image(scale='symlog', target_pixcoords=image.target_guess)
+            self.debugPrintTargetCentroidValue(image)
+            title = 'Raw image with input target location'
+            image.plot_image(scale='symlog', target_pixcoords=image.target_guess, title=title)
             self.log.info(f"Pixel value at centroid = {image.data[int(ypos), int(xpos)]}")
 
         # XXX this needs removing or at least dealing with to not always
@@ -368,13 +386,16 @@ class SpectractorShim:
         #     image, xpos, ypos = self.flipImageLeftRight(image, xpos, ypos)
         #     self.displayImage(image, centroid=(xpos, ypos))
 
-        # Use fast mode
         if parameters.CCD_REBIN > 1:
             self.log.info(f'Rebinning image with rebin of {parameters.CCD_REBIN}')
-            # TODO: Fix bug here where the passed parameter isn't used!
+            apply_rebinning_to_parameters()
             image.rebin()
             if parameters.DEBUG:
-                image.plot_image(scale='symlog', target_pixcoords=image.target_guess)
+                self.debugPrintTargetCentroidValue(image)
+                title = 'Rebinned image with input target location'
+                image.plot_image(scale='symlog', target_pixcoords=image.target_guess, title=title)
+                self.log.debug('Post rebin:')
+                self.debugPrintTargetCentroidValue(image)
 
         # image turning and target finding - use LSST code instead?
         # and if not, at least test how the rotation code compares

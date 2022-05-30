@@ -793,7 +793,7 @@ class ProcessStarTask(pipeBase.PipelineTask):
             'OBS_DIAMETER': 1.20,
             'OBS_EPOCH': "J2000.0",
             'OBS_CAMERA_DEC_FLIP_SIGN': 1,
-            'OBS_CAMERA_RA_FLIP_SIGN': -1,
+            'OBS_CAMERA_RA_FLIP_SIGN': 1,
             'OBS_SURFACE': np.pi * 1.2 ** 2 / 4.,
             'PAPER': False,
             'SAVE': False,
