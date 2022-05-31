@@ -24,11 +24,6 @@ __all__ = ['ProcessStarTask', 'ProcessStarTaskConfig']
 import os
 import numpy as np
 import matplotlib.pyplot as plt
-<<<<<<< HEAD
-=======
-from matplotlib.backends.backend_pdf import PdfPages
-from importlib import reload
->>>>>>> 1036211 (First pass at exposing all Spectractor parameters via pexConfig)
 
 import lsstDebug
 import lsst.afw.image as afwImage
