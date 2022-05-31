@@ -1,3 +1,3 @@
 # -*- python -*-
 from lsst.sconsUtils import scripts
-scripts.BasicSConstruct("atmospec", disableCc=True)
+scripts.BasicSConstruct("atmospec", disableCc=True, noCfgFile=True)
