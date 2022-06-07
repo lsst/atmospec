@@ -143,19 +143,19 @@ class SingleStarCentroidTask(pipeBase.PipelineTask):
         referenceFilterName = self.config.referenceFilterOverride
         referenceFilterLabel = afwImage.FilterLabel(physical=referenceFilterName, band=referenceFilterName)
         # there's a better way of doing this with the task I think
-        originalFilterLabel = inputExp.getFilterLabel()
-        inputExp.setFilterLabel(referenceFilterLabel)
+        originalFilterLabel = inputExp.getFilter()
+        inputExp.setFilter(referenceFilterLabel)
 
         successfulFit = False
         try:
             astromResult = self.astrometry.run(sourceCat=inputSources, exposure=inputExp)
             scatter = astromResult.scatterOnSky.asArcseconds()
-            inputExp.setFilterLabel(originalFilterLabel)
+            inputExp.setFilter(originalFilterLabel)
             if scatter < 1:
                 successfulFit = True
         except (RuntimeError, TaskError):
             self.log.warn("Solver failed to run completely")
-            inputExp.setFilterLabel(originalFilterLabel)
+            inputExp.setFilter(originalFilterLabel)
 
         if successfulFit:
             target = inputExp.getMetadata()['OBJECT']

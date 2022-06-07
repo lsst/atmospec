@@ -180,7 +180,7 @@ class SpectractorShim():
 
     @staticmethod
     def _getFilterAndDisperserFromExp(exp):
-        filterFullName = exp.getFilterLabel().physicalLabel
+        filterFullName = exp.getFilter().physicalLabel
         if FILTER_DELIMITER not in filterFullName:
             filt = filterFullName
             grating = exp.getInfo().getMetadata()['GRATING']
