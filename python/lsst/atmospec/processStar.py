@@ -666,15 +666,15 @@ class ProcessStarTask(pipeBase.PipelineTask):
         # TODO: Change this to doing this the proper way
         referenceFilterName = self.config.referenceFilterOverride
         referenceFilterLabel = afwImage.FilterLabel(physical=referenceFilterName, band=referenceFilterName)
-        originalFilterLabel = exp.getFilterLabel()  # there's a better way of doing this with the task I think
-        exp.setFilterLabel(referenceFilterLabel)
+        originalFilterLabel = exp.getFilter()  # there's a better way of doing this with the task I think
+        exp.setFilter(referenceFilterLabel)
 
         try:
             astromResult = solver.run(sourceCat=icSrc, exposure=exp)
-            exp.setFilterLabel(originalFilterLabel)
+            exp.setFilter(originalFilterLabel)
         except (RuntimeError, TaskError):
             self.log.warn("Solver failed to run completely")
-            exp.setFilterLabel(originalFilterLabel)
+            exp.setFilter(originalFilterLabel)
             return None
 
         scatter = astromResult.scatterOnSky.asArcseconds()
