@@ -506,7 +506,7 @@ def isDispersedDataId(dataId, butler):
 
 def getLinearStagePosition(exp):
     md = exp.getMetadata()
-    linearStagePosition = 115  # this seems to be the rough zero-point for some reason
+    linearStagePosition = 113  # this seems to be the rough zero-point for some reason
     if 'LINSPOS' in md:
         position = md['LINSPOS']  # linear stage position in mm from CCD, larger->further from CCD
         if position is not None:
