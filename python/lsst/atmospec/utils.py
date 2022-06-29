@@ -471,7 +471,7 @@ def vizierLocationForTarget(exp, target, doMotionCorrection):
 
 def isDispersedExp(exp):
     """Check if an exposure is dispersed."""
-    filterFullName = exp.getFilter().physicalLabel
+    filterFullName = exp.filter.physicalLabel
     if FILTER_DELIMITER not in filterFullName:
         raise RuntimeError(f"Error parsing filter name {filterFullName}")
     filt, grating = filterFullName.split(FILTER_DELIMITER)

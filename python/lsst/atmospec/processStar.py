@@ -107,7 +107,7 @@ class ProcessStarTaskConfig(pipeBase.PipelineTaskConfig,
         dtype=str,
         doc="Method to get target centroid. "
         "SPECTRACTOR_FIT_TARGET_CENTROID internally.",
-        default="guess",
+        default="fit",
         allowed={
             # TODO: probably want an "auto" mode
             # XXX MFL: probably want to rename "guess" to "exact" for DM.
@@ -131,7 +131,7 @@ class ProcessStarTaskConfig(pipeBase.PipelineTaskConfig,
         dtype=bool,
         doc="Deconvolve the spectrogram with a simple 2D PSF analysis? "
         "SPECTRACTOR_DECONVOLUTION_PSF2D internally.",
-        default=True,
+        default=False,
     )
     doFullForwardModelDeconvolution = pexConfig.Field(
         dtype=bool,
@@ -143,7 +143,7 @@ class ProcessStarTaskConfig(pipeBase.PipelineTaskConfig,
         dtype=int,
         doc="Rebinning factor to use on the input image, in pixels. "
         "CCD_REBIN internally.",
-        default=2,  # XXX Change to 1, but a value of 1 causes a weird crash!
+        default=1,  # XXX Change to 1, but a value of 1 causes a weird crash!
     )
     xWindow = pexConfig.Field(
         dtype=int,
@@ -280,7 +280,7 @@ class ProcessStarTaskConfig(pipeBase.PipelineTaskConfig,
         dtype=int,
         doc="Transverse width of the background rectangular window in pixels. "
         "PIXWIDTH_BACKGROUND internally.",
-        default=20,
+        default=40,
     )
     backgroundBoxSize = pexConfig.Field(
         dtype=int,
@@ -391,7 +391,7 @@ class ProcessStarTaskConfig(pipeBase.PipelineTaskConfig,
     doDisplayPlots = pexConfig.Field(
         dtype=bool,
         doc="Matplotlib show() the plots, so they show up in a notebook or X window",
-        default=False
+        default=True
     )
     doSavePlots = pexConfig.Field(
         dtype=bool,
@@ -649,6 +649,18 @@ class ProcessStarTask(pipeBase.PipelineTask):
         outputs = self.run(**inputs)
         butlerQC.put(outputs, outputRefs)
 
+    def getNormalizedTargetName(self, target):
+        nameMappingsFile = os.path.join(getPackageDir('atmospec'), 'data', 'nameMappings.txt')
+        names, mappedNames = np.loadtxt(nameMappingsFile, dtype=str, unpack=True)
+        assert len(names) == len(mappedNames)
+        conversions = {name: mapped for name, mapped in zip(names, mappedNames)}
+
+        if target in conversions.keys():
+            converted = conversions[target]
+            self.log.info(f"Converted target name {target} to {converted}")
+            return converted
+        return target
+
     def run(self, *, inputExp, inputCentroid, dataIdDict):
         starNames = self.loadStarNames()
 
@@ -708,6 +720,7 @@ class ProcessStarTask(pipeBase.PipelineTask):
             'OBS_SURFACE': np.pi * 1.2 ** 2 / 4.,
             'PAPER': False,
             'SAVE': False,
+            'DISTANCE2CCD_ERR': 0.4,
 
             # Parameters set programatically
             'LAMBDAS': np.arange(self.config.lambdaMin,
@@ -733,6 +746,7 @@ class ProcessStarTask(pipeBase.PipelineTask):
         overrideDict['DISTANCE2CCD'] = linearStagePosition
 
         target = inputExp.getMetadata()['OBJECT']
+        target = self.getNormalizedTargetName(target)
         if self.config.forceObjectName:
             self.log.info(f"Forcing target name from {target} to {self.config.forceObjectName}")
             target = self.config.forceObjectName
@@ -757,7 +771,7 @@ class ProcessStarTask(pipeBase.PipelineTask):
 
         self.log.info("Finished processing %s" % (dataIdDict))
 
-        self.makeResultPickleable(spectraction)
+        # self.makeResultPickleable(spectraction)
 
         return pipeBase.Struct(spectractorSpectrum=spectraction.spectrum,
                                spectractorImage=spectraction.image,
@@ -775,6 +789,9 @@ class ProcessStarTask(pipeBase.PipelineTask):
         result.spectrum.disperser.N_interp = None
         result.spectrum.disperser.ratio_order_2over1 = None
         result.spectrum.disperser.theta = None
+
+        result.image.disperser.load_specs = None
+        result.spectrum.disperser.load_specs = None
 
     def runAstrometry(self, butler, exp, icSrc):
         refObjLoaderConfig = ReferenceObjectLoader.ConfigClass()

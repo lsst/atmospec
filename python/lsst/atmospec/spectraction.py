@@ -64,14 +64,9 @@ class SpectractorShim:
             self.resetParameters(resetParameters)
 
         if parameters.DEBUG:
-            print('Pre-rebinning:')
+            self.log.debug('Parameters pre-rebinning:')
             dumpParameters()
 
-        apply_rebinning_to_parameters()
-
-        if parameters.DEBUG:
-            print('Post-rebinning:')
-            dumpParameters()
         return
 
     def overrideParameters(self, overrides):
@@ -254,7 +249,7 @@ class SpectractorShim:
 
         return
 
-    def _getImageData(self, exp, trimToSquare=True):
+    def _getImageData(self, exp, trimToSquare=False):
         if trimToSquare:
             data = exp.image.array[0:4000, 0:4000]
         else:
@@ -377,7 +372,7 @@ class SpectractorShim:
             self.debugPrintTargetCentroidValue(image)
             title = 'Raw image with input target location'
             image.plot_image(scale='symlog', target_pixcoords=image.target_guess, title=title)
-            self.log.info(f"Pixel value at centroid = {image.data[int(ypos), int(xpos)]}")
+            self.log.info(f"Pixel value at centroid = {image.data[int(xpos), int(ypos)]}")
 
         # XXX this needs removing or at least dealing with to not always
         # just run! ASAP XXX
@@ -391,6 +386,8 @@ class SpectractorShim:
             apply_rebinning_to_parameters()
             image.rebin()
             if parameters.DEBUG:
+                self.log.info('Parameters post-rebinning:')
+                dumpParameters()
                 self.debugPrintTargetCentroidValue(image)
                 title = 'Rebinned image with input target location'
                 image.plot_image(scale='symlog', target_pixcoords=image.target_guess, title=title)
@@ -402,14 +399,14 @@ class SpectractorShim:
         # this part of Spectractor is certainly slow at the very least
         if True:  # TODO: change this to be an option, at least for testing vs LSST
             self.log.info('Search for the target in the image...')
-            _ = find_target(image, image.target_guess)  # sets the image.target_pixcoords
+            _ = find_target(image, image.target_guess, widths=(parameters.XWINDOW, parameters.YWINDOW))  # sets the image.target_pixcoords
             turn_image(image)  # creates the rotated data, and sets the image.target_pixcoords_rotated
 
             # Rotate the image: several methods
             # Find the exact target position in the rotated image:
             # several methods - but how are these controlled? MFL
             self.log.info('Search for the target in the rotated image...')
-            _ = find_target(image, image.target_guess, rotated=True)
+            _ = find_target(image, image.target_guess, rotated=True, widths=(parameters.XWINDOW_ROT, parameters.YWINDOW_ROT))
         else:
             # code path for if the image is pre-rotated by LSST code
             raise NotImplementedError
