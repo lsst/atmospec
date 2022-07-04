@@ -42,7 +42,7 @@ from lsst.meas.astrom import AstrometryTask, FitAffineWcsTask
 import lsst.afw.detection as afwDetect
 
 from .spectraction import SpectractorShim
-from .utils import getLinearStagePosition
+from .utils import getLinearStagePosition, isDispersedExp
 
 COMMISSIONING = False  # allows illegal things for on the mountain usage.
 
@@ -138,6 +138,12 @@ class ProcessStarTaskConfig(pipeBase.PipelineTaskConfig,
         doc="Deconvolve the spectrogram with full forward model? "
         "SPECTRACTOR_DECONVOLUTION_FFM internally.",
         default=True,
+    )
+    deconvolutionSigmaClip = pexConfig.Field(
+        dtype=float,
+        doc="Deconvolve the spectrogram with full forward model? "
+        "SPECTRACTOR_DECONVOLUTION_SIGMA_CLIP internally.",
+        default=100,
     )
     rebin = pexConfig.Field(
         dtype=int,
@@ -662,6 +668,8 @@ class ProcessStarTask(pipeBase.PipelineTask):
         return target
 
     def run(self, *, inputExp, inputCentroid, dataIdDict):
+        if not isDispersedExp(inputExp):
+            raise RuntimeError(f"Exposure is not a dispersed image {dataIdDict}")
         starNames = self.loadStarNames()
 
         overrideDict = {
@@ -670,6 +678,7 @@ class ProcessStarTask(pipeBase.PipelineTask):
             'SPECTRACTOR_COMPUTE_ROTATION_ANGLE': self.config.rotationAngleMethod,
             'SPECTRACTOR_DECONVOLUTION_PSF2D': self.config.doDeconvolveSpectrum,
             'SPECTRACTOR_DECONVOLUTION_FFM': self.config.doFullForwardModelDeconvolution,
+            'SPECTRACTOR_DECONVOLUTION_SIGMA_CLIP': self.config.deconvolutionSigmaClip,
             'CCD_REBIN': self.config.rebin,
             'XWINDOW': self.config.xWindow,
             'YWINDOW': self.config.yWindow,
