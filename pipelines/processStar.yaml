@@ -12,7 +12,7 @@ tasks:
       doDefect: True
       doLinearize: False
       doCrosstalk: False
-      doSaturationInterpolation: False
+      doSaturationInterpolation: True
       overscan.fitType: 'MEDIAN_PER_ROW'
       doBias: True
   characterizeImage:
