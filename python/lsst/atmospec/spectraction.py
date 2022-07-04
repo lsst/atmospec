@@ -399,14 +399,16 @@ class SpectractorShim:
         # this part of Spectractor is certainly slow at the very least
         if True:  # TODO: change this to be an option, at least for testing vs LSST
             self.log.info('Search for the target in the image...')
-            _ = find_target(image, image.target_guess, widths=(parameters.XWINDOW, parameters.YWINDOW))  # sets the image.target_pixcoords
+            # sets the image.target_pixcoords
+            _ = find_target(image, image.target_guess, widths=(parameters.XWINDOW, parameters.YWINDOW))
             turn_image(image)  # creates the rotated data, and sets the image.target_pixcoords_rotated
 
             # Rotate the image: several methods
             # Find the exact target position in the rotated image:
             # several methods - but how are these controlled? MFL
             self.log.info('Search for the target in the rotated image...')
-            _ = find_target(image, image.target_guess, rotated=True, widths=(parameters.XWINDOW_ROT, parameters.YWINDOW_ROT))
+            _ = find_target(image, image.target_guess, rotated=True,
+                            widths=(parameters.XWINDOW_ROT, parameters.YWINDOW_ROT))
         else:
             # code path for if the image is pre-rotated by LSST code
             raise NotImplementedError
