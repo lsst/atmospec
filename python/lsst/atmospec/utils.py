@@ -403,7 +403,7 @@ def simbadLocationForTarget(target):
 
     obj = Simbad.query_object(target)
     if not obj:
-        raise ValueError(f"Found failed to find {target} in simbad!")
+        raise ValueError(f"Failed to find {target} in simbad!")
     if len(obj) != 1:
         raise ValueError(f"Found {len(obj)} simbad entries for {target}!")
 
