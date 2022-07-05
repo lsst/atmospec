@@ -656,6 +656,8 @@ class ProcessStarTask(pipeBase.PipelineTask):
         butlerQC.put(outputs, outputRefs)
 
     def getNormalizedTargetName(self, target):
+        target = target.replace('spec:', '')
+
         nameMappingsFile = os.path.join(getPackageDir('atmospec'), 'data', 'nameMappings.txt')
         names, mappedNames = np.loadtxt(nameMappingsFile, dtype=str, unpack=True)
         assert len(names) == len(mappedNames)
