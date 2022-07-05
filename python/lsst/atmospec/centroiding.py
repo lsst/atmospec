@@ -151,7 +151,9 @@ class SingleStarCentroidTask(pipeBase.PipelineTask):
             inputExp.setFilter(originalFilterLabel)
             if scatter < 1:
                 successfulFit = True
-        except (RuntimeError, TaskError):
+        except (RuntimeError, TaskError, IndexError):
+            # IndexError raised for low source counts:
+            # index 0 is out of bounds for axis 0 with size 0
             self.log.warn("Solver failed to run completely")
             inputExp.setFilter(originalFilterLabel)
 
