@@ -149,7 +149,7 @@ class ProcessStarTaskConfig(pipeBase.PipelineTaskConfig,
         dtype=int,
         doc="Rebinning factor to use on the input image, in pixels. "
         "CCD_REBIN internally.",
-        default=1,  # XXX Change to 1, but a value of 1 causes a weird crash!
+        default=2,  # TODO Change to 1 once speed issues are resolved
     )
     xWindow = pexConfig.Field(
         dtype=int,
