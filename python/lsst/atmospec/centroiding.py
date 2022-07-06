@@ -151,16 +151,23 @@ class SingleStarCentroidTask(pipeBase.PipelineTask):
             inputExp.setFilter(originalFilterLabel)
             if scatter < 1:
                 successfulFit = True
-        except (RuntimeError, TaskError, IndexError):
+        except (RuntimeError, TaskError, IndexError, ValueError):
             # IndexError raised for low source counts:
             # index 0 is out of bounds for axis 0 with size 0
+
+            # ValueError: negative dimensions are not allowed
+            # seen when refcat source count is low (but non-zero)
             self.log.warn("Solver failed to run completely")
             inputExp.setFilter(originalFilterLabel)
 
+        centroid = None
         if successfulFit:
             target = inputExp.getMetadata()['OBJECT']
             centroid = getTargetCentroidFromWcs(inputExp, target, logger=self.log)
-        else:
+            if not centroid:
+                successfulFit = False
+                self.log.warning(f'Failed to find target centroid for {target} via WCS')
+        if not centroid:
             result = self.qfmTask.run(inputExp)
             centroid = result.brightestObjCentroid
 
