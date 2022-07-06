@@ -55,7 +55,7 @@ class ProcessStarTestCase(lsst.utils.tests.TestCase):
         import lsst.atmospec as atmospec  # noqa: F401
 
     def testClassInstantiation(self):
-        config = SpectralExtractionTask.ConfigClass
+        config = SpectralExtractionTask.ConfigClass()
         task = SpectralExtractionTask(config=config)
         del config, task
 
