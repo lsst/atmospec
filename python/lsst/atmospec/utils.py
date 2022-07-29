@@ -25,7 +25,6 @@ import lsst.afw.image as afwImage
 import lsst.log as lsstLog
 import lsst.afw.geom as afwGeom
 import lsst.geom as geom
-import lsst.daf.persistence as dafPersist
 import lsst.daf.butler as dafButler
 # from lsst.afw.cameraGeom import PIXELS, FOCAL_PLANE  XXX remove if unneeded
 from lsst.obs.lsst.translators.lsst import FILTER_DELIMITER
@@ -472,9 +471,6 @@ def isDispersedDataId(dataId, butler):
         expRecords = set(expRecords)
         assert len(expRecords) == 1, f'Found more than one exposure record for {dataId}'
         filterFullName = expRecords.pop().physical_filter
-
-    elif isinstance(butler, dafPersist.Butler):
-        filterFullName = butler.queryMetadata('raw', 'filter', **dataId)[0]
     else:
         raise RuntimeError(f'Expected a butler, got {type(butler)}')
     if FILTER_DELIMITER not in filterFullName:
