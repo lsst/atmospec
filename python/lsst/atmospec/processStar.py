@@ -24,9 +24,6 @@ __all__ = ['ProcessStarTask', 'ProcessStarTaskConfig']
 import os
 import numpy as np
 import matplotlib.pyplot as plt
-from matplotlib.backends.backend_pdf import PdfPages
-from importlib import reload
-import time
 
 import lsstDebug
 import lsst.afw.image as afwImage
@@ -45,7 +42,7 @@ from lsst.meas.astrom import AstrometryTask, FitAffineWcsTask
 import lsst.afw.detection as afwDetect
 
 from .spectraction import SpectractorShim
-from .utils import getTargetCentroidFromWcs, getLinearStagePosition
+from .utils import getLinearStagePosition
 
 COMMISSIONING = False  # allows illegal things for on the mountain usage.
 
@@ -543,94 +540,6 @@ class ProcessStarTask(pipeBase.PipelineTask):
                                spectractorImage=spectraction.image,
                                spectraction=spectraction)
 
-    def runDataRef(self, dataRef):
-        """Run the ProcessStarTask on a ButlerDataRef for a single exposure.
-
-        Runs isr to get the postISR exposure from the dataRef and passes this
-        to the run() method.
-
-        Parameters
-        ----------
-        dataRef : `daf.persistence.butlerSubset.ButlerDataRef`
-            Butler reference of the detector and exposure ID
-        """
-        t0 = time.time()
-        butler = dataRef.getButler()
-        dataId = dataRef.dataId
-        self.log.info("Processing %s" % (dataRef.dataId))
-
-        if COMMISSIONING:
-            from lsst.rapid.analysis.bestEffort import BestEffortIsr  # import here because not part of DM
-            # TODO: some evidence suggests that CR repair is *significantly*
-            # degrading spectractor performance investigate this for the
-            # default task config as well as ensuring that it doesn't run here
-            # if it does turn out to be problematic.
-            bestEffort = BestEffortIsr(butler=dataRef.getButler())
-            exposure = bestEffort.getExposure(dataId)
-        else:
-            if butler.datasetExists('postISRCCD', dataId):
-                exposure = butler.get('postISRCCD', dataId)
-                self.log.info("Loaded postISRCCD from disk")
-            else:
-                exposure = self.isr.runDataRef(dataRef).exposure
-                self.updateMetadata(exposure)
-                butler.put(exposure, 'postISRCCD', dataId)
-
-        if butler.datasetExists('icExp', dataId) and butler.datasetExists('icSrc', dataId):
-            exposure = butler.get('icExp', dataId)
-            icSrc = butler.get('icSrc', dataId)
-            self.log.info("Loaded icExp and icSrc from disk")
-        else:
-            charRes = self.charImage.runDataRef(dataRef=dataRef, exposure=exposure, doUnpersist=False)
-            exposure = charRes.exposure
-            icSrc = charRes.sourceCat
-            butler.put(exposure, 'icExp', dataId)
-            butler.put(icSrc, 'icSrc', dataId)
-
-        if butler.datasetExists('calexp', dataId):
-            exposure = butler.get('calexp', dataId)
-            self.log.info("Loaded calexp from disk")
-            md = exposure.getMetadata()
-            sourceCentroid = (md['OBJECTX'], md['OBJECTY'])  # set in saved md if previous fit succeeded
-        else:
-            astromResult = self.runAstrometry(butler, exposure, icSrc)
-            if astromResult and astromResult.scatterOnSky.asArcseconds() < 1:
-                target = exposure.getMetadata()['OBJECT']
-                sourceCentroid = getTargetCentroidFromWcs(exposure, target, logger=self.log)
-            else:
-                sourceCentroid = self.findMainSource(exposure)
-                self.log.warn("Astrometric fit failed, failing over to source-finding centroid")
-                self.log.info(f"Centroid of main star at: {sourceCentroid!r}")
-
-            self.updateMetadata(exposure, centroid=sourceCentroid)
-            butler.put(exposure, 'calexp', dataId)
-
-            if self.debug.display and 'raw' in self.debug.displayItems:
-                self.disp1.mtv(exposure)
-                self.disp1.dot('x', sourceCentroid[0], sourceCentroid[1], size=100)
-                self.log.info("Showing full postISR image")
-                self.log.info(f"Centroid of main star at: {sourceCentroid}")
-                self.pause()
-
-        outputRoot = dataRef.getUri(datasetType='spectractorOutputRoot', write=True)
-        if not os.path.exists(outputRoot):
-            os.makedirs(outputRoot)
-            if not os.path.exists(outputRoot):
-                raise RuntimeError(f"Failed to create output dir {outputRoot}")
-        expId = dataRef.dataId['expId']
-
-        result = self.runGen2(exposure, outputRoot, expId, sourceCentroid)
-        self.log.info("Finished processing %s" % (dataRef.dataId))
-
-        result.dataId = dataId
-        self.makeResultPickleable(result)
-        butler.put(result, 'spectraction', dataId)
-
-        t1 = time.time() - t0
-        self.log.info(f'Successfully ran to completion in {t1:.1f}s for {dataId}')
-
-        return result
-
     def makeResultPickleable(self, result):
         """Remove unpicklable components from the output"""
         result.image.target.build_sed = None
@@ -694,107 +603,6 @@ class ProcessStarTask(pipeBase.PipelineTask):
         with open(starNameFile, 'r') as f:
             lines = f.readlines()
         return [line.strip() for line in lines]
-
-    def runGen2(self, exp, spectractorOutputRoot, expId, sourceCentroid):
-        """Calculate the wavelength calibrated 1D spectrum from a postISRCCD.
-
-        An outline of the steps in the processing is as follows:
-         * Source extraction - find the objects in image
-         * Process sources to find the x,y of the main star
-
-         * Given the centroid, the dispersion direction, and the order(s),
-           calculate the spectrum's bounding box
-
-         * (Rotate the image such that the dispersion direction is vertical
-            TODO: DM-18138)
-
-         * Create an initial dispersion relation object from the geometry
-           or alternative bootstrapping method
-
-         * Apply an initial flatfielding - TODO: DM-18141
-
-         * Find and interpolate over cosmics if necessary - TODO: DM-18140
-
-         * Perform an initial spectral extraction, depending on selected method
-         *     Fit a background model and subtract
-         *     Perform row-wise fits for extraction
-         *     TODO: DM-18136 for doing a full-spectrum fit with PSF model
-
-         * Given knowledge of features in the spectrum, find lines in the
-           measured spectrum and re-fit to refine the dispersion relation
-         * Reflatfield the image with the refined dispersion relation
-
-        Parameters
-        ----------
-        exp : `afw.image.Exposure`
-            The postISR exposure in which to find the main star
-
-        Returns
-        -------
-        spectrum : `lsst.atmospec.spectrum` - TODO: DM-18133
-            The wavelength-calibrated 1D stellar spectrum
-        """
-        reload(plt)  # reset matplotlib color cycles when multiprocessing
-        pdfPath = os.path.join(spectractorOutputRoot, 'plots.pdf')
-        starNames = self.loadStarNames()
-
-        if True:
-            overrideDict = {'SAVE': False,
-                            'OBS_NAME': 'AUXTEL',
-                            'DEBUG': self.config.spectractorDebugMode,
-                            'DEBUG_LOGGING': self.config.spectractorDebugLogging,
-                            'DISPLAY': self.config.doDisplayPlots,
-                            'CCD_REBIN': self.config.binning,
-                            'VERBOSE': 0,
-                            # 'CCD_IMSIZE': 4000}
-                            }
-            supplementDict = {'CALLING_CODE': 'LSST_DM',
-                              'STAR_NAMES': starNames}
-
-            # anything that changes between dataRefs!
-            resetParameters = {}
-            if self.config.doSavePlots:
-                resetParameters['LSST_SAVEFIGPATH'] = spectractorOutputRoot
-        else:
-            overrideDict = {}
-            supplementDict = {}
-
-        # TODO: think if this is the right place for this
-        # probably wants to go in spectraction.py really
-        linearStagePosition = getLinearStagePosition(exp)
-        overrideDict['DISTANCE2CCD'] = linearStagePosition
-
-        target = exp.getMetadata()['OBJECT']
-        if self.config.forceObjectName:
-            self.log.info(f"Forcing target name from {target} to {self.config.forceObjectName}")
-            target = self.config.forceObjectName
-
-        if target in ['FlatField position', 'Park position', 'Test', 'NOTSET']:
-            raise ValueError(f"OBJECT set to {target} - this is not a celestial object!")
-
-        packageDir = getPackageDir('atmospec')
-        configFilename = os.path.join(packageDir, 'config', 'auxtel.ini')
-
-        if self.config.doDisplayPlots:  # no pdfpages backend - isn't compatible with display-as-you-go
-            spectractor = SpectractorShim(configFile=configFilename,
-                                          paramOverrides=overrideDict,
-                                          supplementaryParameters=supplementDict,
-                                          resetParameters=resetParameters)
-            result = spectractor.run(exp, *sourceCentroid, target, spectractorOutputRoot)
-        else:
-            try:  # need a try here so that the context manager always exits cleanly so plots always written
-                with PdfPages(pdfPath) as pdf:  # TODO: Doesn't the try need to be inside the with?!
-                    resetParameters['PdfPages'] = pdf
-                    spectractor = SpectractorShim(configFile=configFilename,
-                                                  paramOverrides=overrideDict,
-                                                  supplementaryParameters=supplementDict,
-                                                  resetParameters=resetParameters)
-
-                    result = spectractor.run(exp, *sourceCentroid, target, spectractorOutputRoot)
-            except Exception as e:
-                self.log.warn(f"Caught exception {e}, passing here so pdf can be written to {pdfPath}")
-                result = None
-        return result
 
     def flatfield(self, exp, disp):
         """Placeholder for wavelength dependent flatfielding: TODO: DM-18141
