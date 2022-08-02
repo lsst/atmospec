@@ -19,16 +19,11 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import os
-from astropy.table import Table
-from astropy.time import Time
+from astropy.coordinates import Angle
 import numpy as np
 
-import lsst.daf.persistence as dafPersist
-import lsst.daf.persistence.butlerExceptions as butlerExceptions
+import lsst.daf.butler as dafButler
 from lsst.obs.lsst.translators.lsst import FILTER_DELIMITER
-
-from .utils import airMassFromRawMetadata
 
 __all__ = ["NightStellarSpectra", "getLineValue", "LINE_NAMES"]
 
@@ -78,56 +73,61 @@ def getLineValue(table, lineName, columnName, nanForMissingValues=True):
     return table[columnName][rowNum]
 
 
-class NightStellarSpectra():
+class NightStellarSpectra:
     """Class for holding the results for a night's observations of a given star
     """
 
-    def __init__(self, rerunDir, dayObs, targetName, *, butler=None, ignoreSeqNums=[]):
+    def __init__(self, rerunDir, dayObs, targetName, instrument, *, butler=None, ignoreSeqNums=[],
+                 collections=None):
         self.rerunDir = rerunDir
-        self.dayObs = dayObs
+        self.dayObs = int(dayObs)
         self.targetName = targetName
+        if instrument is None:
+            raise ValueError("An instrument name must be provided.")
+        self.instrument = instrument
+
         if butler:
-            self.butler = butler
+            self.butler = dafButler.Butler(butler=butler, instrument=instrument, collections=collections)
         else:
-            self.butler = dafPersist.Butler(rerunDir)
+            self.butler = dafButler.Butler(rerunDir, instrument=instrument, collections=collections)
         self._loadExtractions(ignoreSeqNums)
         # xxx maybe just load everything and then call removeSeqNums()?
 
     def isDispersed(self, seqNum):  # TODO: change this to use the isDispersedDataId in utils
         """Match object and check is dispersed"""
-        filt = self.butler.queryMetadata('raw', 'filter', dayObs=self.dayObs, seqNum=seqNum)[0]
+        where = "exposure.day_obs = dayObs and exposure.seq_num = seqNum"
+        records = list(self.butler.registry.queryDimensionRecords("exposure",
+                                                                  where=where,
+                                                                  bind={"dayObs": self.dayObs,
+                                                                        "seqNum": seqNum},
+                                                                  instrument=self.instrument,
+                                                                  ))
+        filt = records[0].physical_filter
         grating = filt.split(FILTER_DELIMITER)[1]
         if "ronchi" in grating:
             return True
         return False
 
-    def _expIdFromSeqNum(self, seqNum):
-        return self.butler.queryMetadata('raw', 'expId', dayObs=self.dayObs, seqNum=seqNum)[0]
-
-    def _getTableFilename(self, seqNum):
-        """Return the table filename, or None if not found for the dataId"""
-        expId = self._expIdFromSeqNum(seqNum)
-        try:
-            tablePath = self.butler.getUri('spectractorOutputRoot', expId=expId)
-        except butlerExceptions.NoResults:
-            return None
-
-        tableFilename = os.path.join(tablePath, 'extractedLines.fits')
-        return tableFilename
-
     def _readOneExtractionFile(self, seqNum):
-        filename = self._getTableFilename(seqNum)  # whole thing should really just be a butler.get()
-        if not filename:
+        datasetType = "extraction"
+        try:
+            return self.butler.get(datasetType,
+                                   seq_num=seqNum,
+                                   day_obs=self.dayObs,
+                                   instrument=self.instrument)
+        except LookupError:
             return None
-
-        if os.path.exists(filename):
-            table = Table.read(filename)
-            return table
-        return None
 
     def _loadExtractions(self, ignoreSeqNums):
-        allSeqNums = self.butler.queryMetadata('raw', 'seqNum', dayObs=self.dayObs, object=self.targetName)
-
+        # Get all the observations for the night.
+        where = "exposure.day_obs = dayObs and exposure.target_name = targetName"
+        records = self.butler.registry.queryDimensionRecords("exposure",
+                                                             where=where,
+                                                             instrument=self.instrument,
+                                                             bind={"dayObs": self.dayObs,
+                                                                   "targetName": self.targetName},
+                                                             )
+        allSeqNums = [r.seq_num for r in records]
         self.seqNums = []
         nIgnored = 0
 
@@ -165,27 +165,41 @@ class NightStellarSpectra():
                 self.seqNums.remove(seqNum)
                 self.data.pop(seqNum)
 
+    def _getExposureRecords(self):
+        """Retrieve the exposure records for the relevant exposures.
+
+        Returned in same order as ``self.seqNums``.
+        """
+        where = "exposure.day_obs = dayObs"
+        records = self.butler.registry.queryDimensionRecords("exposure",
+                                                             where=where,
+                                                             bind={"dayObs": self.dayObs},
+                                                             instrument=self.instrument,
+                                                             )
+        seqNums = set(self.seqNums)  # Use set for faster lookup.
+
+        # The order is random, but we are required to return it in the
+        # original order.
+        recordsBySeqNum = {r.seq_num: r for r in records if r.seq_num in seqNums}
+
+        # There should be an entry for ever seqNum since the seqNum list
+        # has already been pre-filtered.
+        return [recordsBySeqNum[seqNum] for seqNum in self.seqNums]
+
     def getFilterDisperserSet(self):
-        fullFilters = set()
-        for seqNum in self.seqNums:
-            fullFilters.add(self.butler.queryMetadata('raw', 'filter', dayObs=self.dayObs, seqNum=seqNum)[0])
+        # Doing a query per seqNum is going to be slow, so query for the
+        # whole night and filter.
+        records = self._getExposureRecords()
+        fullFilters = {r.physical_filter for r in records}
         return fullFilters
 
     def getFilterSet(self):
-        filters = set()
-        for seqNum in self.seqNums:
-            filt = self.butler.queryMetadata('raw', 'filter', dayObs=self.dayObs, seqNum=seqNum)[0]
-            filt = filt.split(FILTER_DELIMITER)[0]
-            filters.add(filt)
-        return filters
+        fullFilters = self.getFilterDisperserSet()
+        return {filt.split(FILTER_DELIMITER)[0] for filt in fullFilters}
 
     def getDisperserSet(self):
-        dispersers = set()
-        for seqNum in self.seqNums:
-            filt = self.butler.queryMetadata('raw', 'filter', dayObs=self.dayObs, seqNum=seqNum)[0]
-            disperser = filt.split(FILTER_DELIMITER)[1]
-            dispersers.add(disperser)
-        return dispersers
+        fullFilters = self.getFilterDisperserSet()
+        return {filt.split(FILTER_DELIMITER)[1] for filt in fullFilters}
 
     def getLineValue(self, seqNum, lineName, columnName):
         # just convenient to be able to call this on a class instance as well
@@ -215,15 +229,16 @@ class NightStellarSpectra():
     def getObsTimes(self):
         # TODO: Add option to subtract int part and multiply up
         # to make it a human-readable small number
-        dates = [self.butler.get('raw_md', dayObs=self.dayObs, seqNum=seqNum)['DATE-OBS']
-                 for seqNum in self.seqNums]
-        return [Time(d).mjd for d in dates]
+        records = self._getExposureRecords()
+        dates = [r.timespan.begin for r in records]
+        return [d.mjd for d in dates]
 
     def getAirmasses(self):
-        return [airMassFromRawMetadata(self.butler.get('raw_md', dayObs=self.dayObs, seqNum=seqNum))
-                for seqNum in self.seqNums]
+        records = self._getExposureRecords()
+        angles = [Angle(r.zenith_angle, unit="deg") for r in records]
+        return [1/np.cos(za.radian) for za in angles]
 
     def printObservationTable(self):
-        for seqNum in self.seqNums:
-            filt = self.butler.queryMetadata('raw', 'filter', dayObs=self.dayObs, seqNum=seqNum)[0]
-            print(seqNum, filt)
+        records = self._getExposureRecords()
+        for r in records:
+            print(r.seq_num, r.physical_filter)
