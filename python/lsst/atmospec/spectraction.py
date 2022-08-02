@@ -19,6 +19,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+import logging
 import os
 import numpy as np
 import astropy.coordinates as asCoords
@@ -37,12 +38,11 @@ from spectractor.extractor.extractor import (FullForwardModelFitWorkspace,  # no
                                              run_spectrogram_deconvolution_psf2d)
 from spectractor.extractor.spectrum import Spectrum, calibrate_spectrum  # noqa: E402
 
-import lsst.log as lsstLog  # noqa: E402
 from lsst.daf.base import DateTime  # noqa: E402
 from lsst.obs.lsst.translators.lsst import FILTER_DELIMITER  # noqa: E402
 
 
-class SpectractorShim():
+class SpectractorShim:
     """Class for running the Spectractor code.
 
     This is designed to provide an implementation of the top-level function in
@@ -55,7 +55,7 @@ class SpectractorShim():
         if configFile:
             print(f"Loading config from {configFile}")
             load_config(configFile)
-        self.log = lsstLog.getLogger(__name__)
+        self.log = logging.getLogger(__name__)
         if paramOverrides is not None:
             self.overrideParameters(paramOverrides)
         if supplementaryParameters is not None:

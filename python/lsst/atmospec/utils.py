@@ -19,10 +19,10 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+import logging
 import numpy as np
 import lsst.afw.math as afwMath
 import lsst.afw.image as afwImage
-import lsst.log as lsstLog
 import lsst.afw.geom as afwGeom
 import lsst.geom as geom
 import lsst.daf.butler as dafButler
@@ -244,7 +244,7 @@ def rotateExposure(exp, nDegrees, kernelName='lanczos4', logger=None):
         Number of degrees clockwise to rotate by
     kernelName : `str`
         Name of the warping kernel, used to instantiate the warper.
-    logger : `lsst.log.Log`
+    logger : `logging.Logger`
         Logger for logging warnings
 
     Returns
@@ -255,11 +255,11 @@ def rotateExposure(exp, nDegrees, kernelName='lanczos4', logger=None):
     nDegrees = nDegrees % 360
 
     if not logger:
-        logger = lsstLog.getLogger('atmospec.utils')
+        logger = logging.getLogger(__name__)
 
     wcs = exp.getWcs()
     if not wcs:
-        logger.warn("Can't rotate exposure without a wcs - returning exp unrotated")
+        logger.warning("Can't rotate exposure without a wcs - returning exp unrotated")
         return exp.clone()  # return a clone so it's always returning a copy as this is what default does
 
     warper = afwMath.Warper(kernelName)
@@ -321,7 +321,7 @@ def getTargetCentroidFromWcs(exp, target, doMotionCorrection=True, logger=None):
         is not found.
     """
     if logger is None:
-        logger = lsstLog.Log.getDefaultLogger()
+        logger = logging.getLogger(__name__)
 
     resultFrom = None
     targetLocation = None
@@ -330,26 +330,25 @@ def getTargetCentroidFromWcs(exp, target, doMotionCorrection=True, logger=None):
     try:
         targetLocation = vizierLocationForTarget(exp, target, doMotionCorrection=doMotionCorrection)
         resultFrom = 'vizier'
-        logger.info(f"Target location for {target} retrieved from Vizier")
+        logger.info("Target location for %s retrieved from Vizier", target)
 
     # fail over to simbad - it has ~every target, but no proper motions
     except ValueError:
         try:
-            logger.warn(f"Target {target} not found in Vizier, failing over to try Simbad")
+            logger.warning("Target %s not found in Vizier, failing over to try Simbad", target)
             targetLocation = simbadLocationForTarget(target)
             resultFrom = 'simbad'
-            logger.info(f"Target location for {target} retrieved from Simbad")
+            logger.info("Target location for %s retrieved from Simbad", target)
         except ValueError as inst:  # simbad found zero or several results for target
-            msg = inst.args[0]
-            logger.warn(msg)
+            logger.warning("%s", inst.args[0])
             return None
 
     if not targetLocation:
         return None
 
     if doMotionCorrection and resultFrom == 'simbad':
-        logger.warn(f"Failed to apply motion correction because {target} was"
-                    " only found in Simbad, not Vizier/Hipparcos")
+        logger.warning("Failed to apply motion correction because %s was"
+                       " only found in Simbad, not Vizier/Hipparcos", target)
 
     pixCoord = exp.getWcs().skyToPixel(targetLocation)
     return pixCoord
