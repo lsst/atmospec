@@ -26,14 +26,13 @@ import lsst.afw.image as afwImage
 import lsst.afw.geom as afwGeom
 import lsst.geom as geom
 import lsst.daf.butler as dafButler
+from astro_metadata_translator import ObservationInfo
 # from lsst.afw.cameraGeom import PIXELS, FOCAL_PLANE  XXX remove if unneeded
 from lsst.obs.lsst.translators.lsst import FILTER_DELIMITER
-from lsst.obs.lsst.translators.latiss import AUXTEL_LOCATION
 
 import astropy
 import astropy.units as u
-from astropy.time import Time
-from astropy.coordinates import SkyCoord, AltAz, Distance
+from astropy.coordinates import SkyCoord, Distance
 
 
 def makeGainFlat(exposure, gainDict, invertGains=False):
@@ -281,20 +280,24 @@ def rotateExposure(exp, nDegrees, kernelName='lanczos4', logger=None):
 def airMassFromRawMetadata(md):
     """Calculate the visit's airmass from the raw header information.
 
-    Returns the airmass, or 0 if the calculation fails.
-    Zero was chosen as it is an obviously unphysical value, but means
-    that calling code doesn't have to test if None, as numeric values can
-    be used more easily in place."""
-    time = Time(md['DATE-OBS'])
-    if md['RASTART'] is not None and md['DECSTART'] is not None:
-        skyLocation = SkyCoord(md['RASTART'], md['DECSTART'], unit=u.deg)
-    elif md['RA'] is not None and md['DEC'] is not None:
-        skyLocation = SkyCoord(md['RA'], md['DEC'], unit=u.deg)
-    else:
-        return 0
-    altAz = AltAz(obstime=time, location=AUXTEL_LOCATION)
-    observationAltAz = skyLocation.transform_to(altAz)
-    return observationAltAz.secz.value
+    Parameters
+    ----------
+    md : `Mapping`
+        The raw header.
+
+    Returns
+    -------
+    airmass : `float`
+        Returns the airmass, or 0.0 if the calculation fails.
+        Zero was chosen as it is an obviously unphysical value, but means
+        that calling code doesn't have to test if None, as numeric values can
+        be used more easily in place.
+    """
+    try:
+        obsInfo = ObservationInfo(md, subset={"boresight_airmass"})
+    except Exception:
+        return 0.0
+    return obsInfo.boresight_airmass
 
 
 def getTargetCentroidFromWcs(exp, target, doMotionCorrection=True, logger=None):
