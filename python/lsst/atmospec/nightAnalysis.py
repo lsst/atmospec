@@ -152,28 +152,27 @@ class NightStellarSpectra:
     def _getExposureRecords(self):
         """Retrieve the exposure records for the relevant exposures.
 
-        Returned in same order as ``self.seqNums``.
+        Returns
+        -------
+        records : `dict` [`int`, `DimensionRecord`]
+            The matching records, indexed by sequence number.
         """
         where = "exposure.day_obs = dayObs"
         records = self.butler.registry.queryDimensionRecords("exposure",
                                                              where=where,
                                                              bind={"dayObs": self.dayObs},
-                                                             )
+                                                             ).order_by("seq_num")
         seqNums = set(self.seqNums)  # Use set for faster lookup.
 
-        # The order is random, but we are required to return it in the
-        # original order.
-        recordsBySeqNum = {r.seq_num: r for r in records if r.seq_num in seqNums}
-
-        # There should be an entry for ever seqNum since the seqNum list
-        # has already been pre-filtered.
-        return [recordsBySeqNum[seqNum] for seqNum in self.seqNums]
+        # Store in dict indexed by sequence number. This allows the caller
+        # to choose their own ordering and removes any potential duplicates.
+        return {r.seq_num: r for r in records if r.seq_num in seqNums}
 
     def getFilterDisperserSet(self):
         # Doing a query per seqNum is going to be slow, so query for the
         # whole night and filter.
         records = self._getExposureRecords()
-        fullFilters = {r.physical_filter for r in records}
+        fullFilters = {records[seq_num].physical_filter for seq_num in self.seqNums}
         return fullFilters
 
     def getFilterSet(self):
@@ -213,15 +212,17 @@ class NightStellarSpectra:
         # TODO: Add option to subtract int part and multiply up
         # to make it a human-readable small number
         records = self._getExposureRecords()
-        dates = [r.timespan.begin for r in records]
+        dates = [records[seq_num].timespan.begin for seq_num in self.seqNums]
         return [d.mjd for d in dates]
 
     def getAirmasses(self):
         records = self._getExposureRecords()
-        angles = [Angle(r.zenith_angle, unit="deg") for r in records]
+        zenith_angles = [records[seq_num].zenith_angle for seq_num in self.seqNums]
+        angles = [Angle(za, unit="deg") for za in zenith_angles]
         return [1/np.cos(za.radian) for za in angles]
 
     def printObservationTable(self):
         records = self._getExposureRecords()
-        for r in records:
+        for seq_num in self.seqNums:
+            r = records[seq_num]
             print(r.seq_num, r.physical_filter)
