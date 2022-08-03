@@ -77,19 +77,15 @@ class NightStellarSpectra:
     """Class for holding the results for a night's observations of a given star
     """
 
-    def __init__(self, rerunDir, dayObs, targetName, instrument, *, butler=None, ignoreSeqNums=[],
+    def __init__(self, butler, dayObs, targetName, *, instrument="LATISS", ignoreSeqNums=[],
                  collections=None):
-        self.rerunDir = rerunDir
         self.dayObs = int(dayObs)
         self.targetName = targetName
-        if instrument is None:
-            raise ValueError("An instrument name must be provided.")
-        self.instrument = instrument
 
-        if butler:
+        if isinstance(butler, dafButler.Butler):
             self.butler = dafButler.Butler(butler=butler, instrument=instrument, collections=collections)
         else:
-            self.butler = dafButler.Butler(rerunDir, instrument=instrument, collections=collections)
+            self.butler = dafButler.Butler(butler, instrument=instrument, collections=collections)
         self._loadExtractions(ignoreSeqNums)
         # xxx maybe just load everything and then call removeSeqNums()?
 
@@ -100,7 +96,6 @@ class NightStellarSpectra:
                                                                   where=where,
                                                                   bind={"dayObs": self.dayObs,
                                                                         "seqNum": seqNum},
-                                                                  instrument=self.instrument,
                                                                   ))
         filt = records[0].physical_filter
         grating = filt.split(FILTER_DELIMITER)[1]
@@ -113,8 +108,7 @@ class NightStellarSpectra:
         try:
             return self.butler.get(datasetType,
                                    seq_num=seqNum,
-                                   day_obs=self.dayObs,
-                                   instrument=self.instrument)
+                                   day_obs=self.dayObs)
         except LookupError:
             return None
 
@@ -123,7 +117,6 @@ class NightStellarSpectra:
         where = "exposure.day_obs = dayObs and exposure.target_name = targetName"
         records = self.butler.registry.queryDimensionRecords("exposure",
                                                              where=where,
-                                                             instrument=self.instrument,
                                                              bind={"dayObs": self.dayObs,
                                                                    "targetName": self.targetName},
                                                              )
@@ -174,7 +167,6 @@ class NightStellarSpectra:
         records = self.butler.registry.queryDimensionRecords("exposure",
                                                              where=where,
                                                              bind={"dayObs": self.dayObs},
-                                                             instrument=self.instrument,
                                                              )
         seqNums = set(self.seqNums)  # Use set for faster lookup.
 
