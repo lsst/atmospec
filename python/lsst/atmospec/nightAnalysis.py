@@ -129,7 +129,8 @@ class NightStellarSpectra:
             msg += f" of which {nIgnored} were skipped."
         print(msg)
 
-        self.seqNums = sorted(self.seqNums)  # not guaranteed to be in order, I don't think
+        # Force sorted order and remove any potential duplicates.
+        self.seqNums = sorted(set(self.seqNums))
 
         self.data = {}
         successes = []
