@@ -132,14 +132,13 @@ class NightStellarSpectra:
         self.seqNums = sorted(self.seqNums)  # not guaranteed to be in order, I don't think
 
         self.data = {}
-        fails = []
+        successes = []
         for seqNum in self.seqNums:
             linesTable = self._readOneExtractionFile(seqNum)
             if linesTable:
                 self.data[seqNum] = linesTable
-            else:
-                fails.append(seqNum)  # can't remove while looping
-        self.seqNums = [s for s in self.seqNums if s not in fails]
+                successes.append(seqNum)
+        self.seqNums = successes
         print(f"Loaded extractions for {len(self.data.keys())} of the above")
         return
 
