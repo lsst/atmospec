@@ -24,6 +24,7 @@ import numpy as np
 
 import lsst.daf.butler as dafButler
 from lsst.obs.lsst.translators.lsst import FILTER_DELIMITER
+from .utils import isDispersedDataId
 
 __all__ = ["NightStellarSpectra", "getLineValue", "LINE_NAMES"]
 
@@ -89,19 +90,10 @@ class NightStellarSpectra:
         self._loadExtractions(ignoreSeqNums)
         # xxx maybe just load everything and then call removeSeqNums()?
 
-    def isDispersed(self, seqNum):  # TODO: change this to use the isDispersedDataId in utils
-        """Match object and check is dispersed"""
-        where = "exposure.day_obs = dayObs and exposure.seq_num = seqNum"
-        records = list(self.butler.registry.queryDimensionRecords("exposure",
-                                                                  where=where,
-                                                                  bind={"dayObs": self.dayObs,
-                                                                        "seqNum": seqNum},
-                                                                  ))
-        filt = records[0].physical_filter
-        grating = filt.split(FILTER_DELIMITER)[1]
-        if "ronchi" in grating:
-            return True
-        return False
+    def isDispersed(self, seqNum):
+        """Check if this observation is dispersed."""
+        dataId = {"day_obs": self.dayObs, "seq_num": seqNum}
+        return isDispersedDataId(dataId, self.butler)
 
     def _readOneExtractionFile(self, seqNum):
         datasetType = "extraction"
