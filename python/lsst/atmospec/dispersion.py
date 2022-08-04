@@ -19,15 +19,14 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+import logging
 import numpy as np
-
-import lsst.log as lsstLog
 
 
 __all__ = ['DispersionRelation']
 
 
-class DispersionRelation(object):
+class DispersionRelation:
     def __init__(self, observedLines, spectralLines):
         """The dispersion relation, relating pixel to wavelength and vice versa
 
@@ -49,7 +48,7 @@ class DispersionRelation(object):
         self.observedLines = observedLines
         self.spectralLines = spectralLines
 
-        self.log = lsstLog.Log.getLogger('atmospec.dispersionRelation')
+        self.log = logging.getLogger('lsst.atmospec.dispersionRelation')
         self.pix2wlCoeffs = self._calcCoefficients()
 
     def _calcCoefficients(self):

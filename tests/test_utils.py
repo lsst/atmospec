@@ -30,7 +30,7 @@ import numpy as np
 
 import lsst.utils
 import lsst.utils.tests
-from lsst.atmospec.utils import argMaxNd, getSamplePoints
+from lsst.atmospec.utils import argMaxNd, getSamplePoints, airMassFromRawMetadata
 
 
 class AtmospecUtilsTestCase(lsst.utils.tests.TestCase):
@@ -88,6 +88,19 @@ class AtmospecUtilsTestCase(lsst.utils.tests.TestCase):
         for start, end in itertools.product((-1.5, -1, 0, 2.3), (0, 3.14, -1e9)):
             points = getSamplePoints(start, end, 2, includeEndpoints=True, integers=False)
             self.assertEqual(points, [start, end])
+
+    def test_airmass(self):
+        md = {
+            # Minimalist header.
+            "INSTRUME": "LATISS",
+            "MJD-OBS": 60_000.0,
+            "OBSID": "AT_O_20300101_00000",
+            "AMSTART": 1.234,
+        }
+        self.assertEqual(airMassFromRawMetadata(md), 1.234)
+
+        # Bad header should return 0.0.
+        self.assertEqual(airMassFromRawMetadata({}), 0.0)
 
 
 class TestMemory(lsst.utils.tests.MemoryTestCase):

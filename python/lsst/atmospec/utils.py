@@ -19,22 +19,36 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+__all__ = [
+    "argMaxNd",
+    "gainFromFlatPair",
+    "getAmpReadNoiseFromRawExp",
+    "getLinearStagePosition",
+    "getSamplePoints",
+    "getTargetCentroidFromWcs",
+    "isDispersedDataId",
+    "isDispersedExp",
+    "isExposureTrimmed",
+    "makeGainFlat",
+    "rotateExposure",
+    "simbadLocationForTarget",
+    "vizierLocationForTarget",
+]
+
+import logging
 import numpy as np
 import lsst.afw.math as afwMath
 import lsst.afw.image as afwImage
-import lsst.log as lsstLog
 import lsst.afw.geom as afwGeom
 import lsst.geom as geom
-import lsst.daf.persistence as dafPersist
 import lsst.daf.butler as dafButler
+from astro_metadata_translator import ObservationInfo
 # from lsst.afw.cameraGeom import PIXELS, FOCAL_PLANE  XXX remove if unneeded
 from lsst.obs.lsst.translators.lsst import FILTER_DELIMITER
-from lsst.obs.lsst.translators.latiss import AUXTEL_LOCATION
 
 import astropy
 import astropy.units as u
-from astropy.time import Time
-from astropy.coordinates import SkyCoord, AltAz, Distance
+from astropy.coordinates import SkyCoord, Distance
 
 
 def makeGainFlat(exposure, gainDict, invertGains=False):
@@ -245,7 +259,7 @@ def rotateExposure(exp, nDegrees, kernelName='lanczos4', logger=None):
         Number of degrees clockwise to rotate by
     kernelName : `str`
         Name of the warping kernel, used to instantiate the warper.
-    logger : `lsst.log.Log`
+    logger : `logging.Logger`
         Logger for logging warnings
 
     Returns
@@ -256,11 +270,11 @@ def rotateExposure(exp, nDegrees, kernelName='lanczos4', logger=None):
     nDegrees = nDegrees % 360
 
     if not logger:
-        logger = lsstLog.getLogger('atmospec.utils')
+        logger = logging.getLogger(__name__)
 
     wcs = exp.getWcs()
     if not wcs:
-        logger.warn("Can't rotate exposure without a wcs - returning exp unrotated")
+        logger.warning("Can't rotate exposure without a wcs - returning exp unrotated")
         return exp.clone()  # return a clone so it's always returning a copy as this is what default does
 
     warper = afwMath.Warper(kernelName)
@@ -282,20 +296,24 @@ def rotateExposure(exp, nDegrees, kernelName='lanczos4', logger=None):
 def airMassFromRawMetadata(md):
     """Calculate the visit's airmass from the raw header information.
 
-    Returns the airmass, or 0 if the calculation fails.
-    Zero was chosen as it is an obviously unphysical value, but means
-    that calling code doesn't have to test if None, as numeric values can
-    be used more easily in place."""
-    time = Time(md['DATE-OBS'])
-    if md['RASTART'] is not None and md['DECSTART'] is not None:
-        skyLocation = SkyCoord(md['RASTART'], md['DECSTART'], unit=u.deg)
-    elif md['RA'] is not None and md['DEC'] is not None:
-        skyLocation = SkyCoord(md['RA'], md['DEC'], unit=u.deg)
-    else:
-        return 0
-    altAz = AltAz(obstime=time, location=AUXTEL_LOCATION)
-    observationAltAz = skyLocation.transform_to(altAz)
-    return observationAltAz.secz.value
+    Parameters
+    ----------
+    md : `Mapping`
+        The raw header.
+
+    Returns
+    -------
+    airmass : `float`
+        Returns the airmass, or 0.0 if the calculation fails.
+        Zero was chosen as it is an obviously unphysical value, but means
+        that calling code doesn't have to test if None, as numeric values can
+        be used more easily in place.
+    """
+    try:
+        obsInfo = ObservationInfo(md, subset={"boresight_airmass"})
+    except Exception:
+        return 0.0
+    return obsInfo.boresight_airmass
 
 
 def getTargetCentroidFromWcs(exp, target, doMotionCorrection=True, logger=None):
@@ -322,7 +340,7 @@ def getTargetCentroidFromWcs(exp, target, doMotionCorrection=True, logger=None):
         is not found.
     """
     if logger is None:
-        logger = lsstLog.Log.getDefaultLogger()
+        logger = logging.getLogger(__name__)
 
     resultFrom = None
     targetLocation = None
@@ -331,26 +349,25 @@ def getTargetCentroidFromWcs(exp, target, doMotionCorrection=True, logger=None):
     try:
         targetLocation = vizierLocationForTarget(exp, target, doMotionCorrection=doMotionCorrection)
         resultFrom = 'vizier'
-        logger.info(f"Target location for {target} retrieved from Vizier")
+        logger.info("Target location for %s retrieved from Vizier", target)
 
     # fail over to simbad - it has ~every target, but no proper motions
     except ValueError:
         try:
-            logger.warn(f"Target {target} not found in Vizier, failing over to try Simbad")
+            logger.warning("Target %s not found in Vizier, failing over to try Simbad", target)
             targetLocation = simbadLocationForTarget(target)
             resultFrom = 'simbad'
-            logger.info(f"Target location for {target} retrieved from Simbad")
+            logger.info("Target location for %s retrieved from Simbad", target)
         except ValueError as inst:  # simbad found zero or several results for target
-            msg = inst.args[0]
-            logger.warn(msg)
+            logger.warning("%s", inst.args[0])
             return None
 
     if not targetLocation:
         return None
 
     if doMotionCorrection and resultFrom == 'simbad':
-        logger.warn(f"Failed to apply motion correction because {target} was"
-                    " only found in Simbad, not Vizier/Hipparcos")
+        logger.warning("Failed to apply motion correction because %s was"
+                       " only found in Simbad, not Vizier/Hipparcos", target)
 
     pixCoord = exp.getWcs().skyToPixel(targetLocation)
     return pixCoord
@@ -472,9 +489,6 @@ def isDispersedDataId(dataId, butler):
         expRecords = set(expRecords)
         assert len(expRecords) == 1, f'Found more than one exposure record for {dataId}'
         filterFullName = expRecords.pop().physical_filter
-
-    elif isinstance(butler, dafPersist.Butler):
-        filterFullName = butler.queryMetadata('raw', 'filter', **dataId)[0]
     else:
         raise RuntimeError(f'Expected a butler, got {type(butler)}')
     if FILTER_DELIMITER not in filterFullName:
