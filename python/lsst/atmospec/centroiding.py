@@ -124,6 +124,7 @@ class SingleStarCentroidTask(pipeBase.PipelineTask):
         refObjLoader = ReferenceObjectLoader(dataIds=[ref.datasetRef.dataId
                                                       for ref in inputRefs.astromRefCat],
                                              refCats=inputs.pop('astromRefCat'),
+                                             name=self.config.connections.astromRefCat,
                                              config=self.config.astromRefObjLoader, log=self.log)
 
         refObjLoader.pixelMargin = 1000
