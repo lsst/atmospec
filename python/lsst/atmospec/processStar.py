@@ -555,7 +555,6 @@ class ProcessStarTask(pipeBase.PipelineTask):
 
     def runAstrometry(self, butler, exp, icSrc):
         refObjLoaderConfig = LoadIndexedReferenceObjectsTask.ConfigClass()
-        refObjLoaderConfig.ref_dataset_name = 'gaia_dr2_20191105'
         refObjLoaderConfig.pixelMargin = 1000
         refObjLoader = LoadIndexedReferenceObjectsTask(butler=butler, config=refObjLoaderConfig)
 
