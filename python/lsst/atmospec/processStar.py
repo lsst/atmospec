@@ -36,7 +36,7 @@ from lsst.pipe.base.task import TaskError
 
 from lsst.utils import getPackageDir
 from lsst.pipe.tasks.characterizeImage import CharacterizeImageTask
-from lsst.meas.algorithms import LoadIndexedReferenceObjectsTask, MagnitudeLimit
+from lsst.meas.algorithms import ReferenceObjectLoader, MagnitudeLimit
 from lsst.meas.astrom import AstrometryTask, FitAffineWcsTask
 
 import lsst.afw.detection as afwDetect
@@ -554,10 +554,10 @@ class ProcessStarTask(pipeBase.PipelineTask):
         result.spectrum.disperser.theta = None
 
     def runAstrometry(self, butler, exp, icSrc):
-        refObjLoaderConfig = LoadIndexedReferenceObjectsTask.ConfigClass()
-        refObjLoaderConfig.ref_dataset_name = 'gaia_dr2_20191105'
+        refObjLoaderConfig = ReferenceObjectLoader.ConfigClass()
         refObjLoaderConfig.pixelMargin = 1000
-        refObjLoader = LoadIndexedReferenceObjectsTask(butler=butler, config=refObjLoaderConfig)
+        # TODO: needs to be an Input Connection
+        refObjLoader = ReferenceObjectLoader(config=refObjLoaderConfig)
 
         astromConfig = AstrometryTask.ConfigClass()
         astromConfig.wcsFitter.retarget(FitAffineWcsTask)
