@@ -162,7 +162,7 @@ class SingleStarCentroidTask(pipeBase.PipelineTask):
 
         centroid = None
         if successfulFit:
-            target = inputExp.getMetadata()['OBJECT']
+            target = inputExp.visitInfo.object
             centroid = getTargetCentroidFromWcs(inputExp, target, logger=self.log)
             if not centroid:
                 successfulFit = False

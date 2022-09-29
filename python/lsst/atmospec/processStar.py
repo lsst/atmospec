@@ -756,7 +756,7 @@ class ProcessStarTask(pipeBase.PipelineTask):
         linearStagePosition = getLinearStagePosition(inputExp)
         overrideDict['DISTANCE2CCD'] = linearStagePosition
 
-        target = inputExp.getMetadata()['OBJECT']
+        target = inputExp.visitInfo.object
         target = self.getNormalizedTargetName(target)
         if self.config.forceObjectName:
             self.log.info(f"Forcing target name from {target} to {self.config.forceObjectName}")
