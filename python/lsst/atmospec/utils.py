@@ -37,7 +37,6 @@ __all__ = [
 
 import logging
 import numpy as np
-import logging
 import sys
 import lsst.afw.math as afwMath
 import lsst.afw.image as afwImage
