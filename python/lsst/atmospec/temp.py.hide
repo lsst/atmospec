@@ -1,0 +1,46 @@
+# internal config options - non user-facing
+mypath = os.path.dirname(__file__)
+DISPERSER_DIR = os.path.join(mypath, "extractor/dispersers/")
+CONFIG_DIR = os.path.join(mypath, "../config/")
+THROUGHPUT_DIR = os.path.join(mypath, "simulation/CTIOThroughput/")
+if 'ASTROMETRYNET_DIR' in os.environ:
+    ASTROMETRYNET_DIR = os.getenv('ASTROMETRYNET_DIR') + '/'
+else:
+    ASTROMETRYNET_DIR = ''
+if 'LIBRADTRAN_DIR' in os.environ:
+    LIBRADTRAN_DIR = os.getenv('LIBRADTRAN_DIR') + '/'
+else:
+    LIBRADTRAN_DIR = ''
+OBS_TELESCOPE_TRANSMISSION = 'ctio_throughput.txt'  # telescope transmission file
+OBS_FULL_INSTRUMENT_TRANSMISSON = 'ctio_throughput_300517_v1.txt'  # full instrument transmission file
+OBS_QUANTUM_EFFICIENCY = "qecurve.txt"  # quantum efficiency of the detector file
+
+
+# set programatically
+OBS_TRANSMISSION_SYSTEMATICS = 0.005
+GRATING_ORDER_2OVER1 = 0.1  # default value for order 2 over order 1 transmission ratio
+
+OBS_OBJECT_TYPE = 'STAR'  # To choose between STAR, HG-AR, MONOCHROMATOR
+DISTANCE2CCD = 55.45  # distance between hologram and CCD in mm
+DISTANCE2CCD_ERR = 0.19  # uncertainty on distance between hologram and CCD in mm
+CCD_PIXEL2MM = 24e-3  # pixel size in mm
+CCD_PIXEL2ARCSEC = 0.401  # pixel size in arcsec
+
+# Filters
+HALPHA_CENTER = 655.9e-6  # center of the filter in mm
+HALPHA_WIDTH = 6.4e-6  # width of the filter in mm
+FGB37 = {'label': 'FGB37', 'min': 350, 'max': 750}
+RG715 = {'label': 'RG715', 'min': 690, 'max': 1100}
+HALPHA_FILTER = {'label': 'Halfa', 'min': HALPHA_CENTER - 2 * HALPHA_WIDTH, 'max': HALPHA_CENTER + 2 * HALPHA_WIDTH}
+ZGUNN = {'label': 'Z-Gunn', 'min': 800, 'max': 1100}
+FILTERS = [RG715, FGB37, HALPHA_FILTER, ZGUNN]
+
+
+
+# Actual constants
+SED_UNIT = 1 * units.erg / units.s / units.cm ** 2 / units.nanometer
+TIME_UNIT = 1 * units.s  # flux for 1 second
+hc = const.h * const.c  # h.c product of fontamental constants c and h
+wl_dwl_unit = units.nanometer ** 2  # lambda.dlambda  in wavelength in nm
+FLAM_TO_ADURATE = ((OBS_SURFACE * SED_UNIT * TIME_UNIT * wl_dwl_unit / hc / CCD_GAIN).decompose()).value
+CCD_ARCSEC2RADIANS = np.pi / (180. * 3600.)  # conversion factor from arcsec to radians

@@ -365,6 +365,16 @@ class ProcessStarTaskConfig(pipeBase.PipelineTaskConfig,
         "CALIB_SAVGOL_ORDER internally.",
         default=2,
     )
+    offsetFromMainStar = pexConfig.Field(
+        dtype=int,
+        doc="Number of pixels from the main star's centroid to start extraction",
+        default=100
+    )
+    spectrumLengthPixels = pexConfig.Field(
+        dtype=int,
+        doc="Length of the spectrum in pixels",
+        default=5000
+    )
     # ProcessStar own parameters
     isr = pexConfig.ConfigurableField(
         target=IsrTask,
