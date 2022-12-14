@@ -151,12 +151,15 @@ class SingleStarCentroidTask(pipeBase.PipelineTask):
             inputExp.setFilter(originalFilterLabel)
             if scatter < 1:
                 successfulFit = True
-        except (RuntimeError, TaskError, IndexError, ValueError):
+        except (RuntimeError, TaskError, IndexError, ValueError, AttributeError):
             # IndexError raised for low source counts:
             # index 0 is out of bounds for axis 0 with size 0
 
             # ValueError: negative dimensions are not allowed
             # seen when refcat source count is low (but non-zero)
+
+            # AttributeError: 'NoneType' object has no attribute 'asArcseconds'
+            # when the result is a failure
             self.log.warn("Solver failed to run completely")
             inputExp.setFilter(originalFilterLabel)
 
