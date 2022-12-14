@@ -145,6 +145,12 @@ class ProcessStarTaskConfig(pipeBase.PipelineTaskConfig,
         "SPECTRACTOR_DECONVOLUTION_SIGMA_CLIP internally.",
         default=100,
     )
+    doSubtractBackground = pexConfig.Field(
+        dtype=bool,
+        doc="Subtract the background with Spectractor? "
+        "SPECTRACTOR_BACKGROUND_SUBTRACTION internally.",
+        default=True,
+    )
     rebin = pexConfig.Field(
         dtype=int,
         doc="Rebinning factor to use on the input image, in pixels. "
@@ -691,6 +697,7 @@ class ProcessStarTask(pipeBase.PipelineTask):
             'SPECTRACTOR_DECONVOLUTION_PSF2D': self.config.doDeconvolveSpectrum,
             'SPECTRACTOR_DECONVOLUTION_FFM': self.config.doFullForwardModelDeconvolution,
             'SPECTRACTOR_DECONVOLUTION_SIGMA_CLIP': self.config.deconvolutionSigmaClip,
+            'SPECTRACTOR_BACKGROUND_SUBTRACTION': self.config.doSubtractBackground,
             'CCD_REBIN': self.config.rebin,
             'XWINDOW': self.config.xWindow,
             'YWINDOW': self.config.yWindow,
