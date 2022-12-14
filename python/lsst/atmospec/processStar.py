@@ -120,8 +120,11 @@ class ProcessStarTaskConfig(pipeBase.PipelineTaskConfig,
         dtype=str,
         doc="Method used to get the image rotation angle. "
         "SPECTRACTOR_COMPUTE_ROTATION_ANGLE internally.",
-        default="hessian",
+        default="disperser",
         allowed={
+            # XXX MFL: probably need to use setDefaults to set this based on
+            # the disperser. I think Ronchi gratings want hessian and the
+            # holograms want disperser.
             "False": "Do not rotate the image.",
             "disperser": "Use the disperser angle geometry as specified in the disperser definition.",
             "hessian": "Compute the angle from the image using a Hessian transform.",
