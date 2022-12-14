@@ -423,7 +423,7 @@ class SpectractorShim:
                                                               ws=(parameters.PIXDIST_BACKGROUND,
                                                                   parameters.PIXDIST_BACKGROUND
                                                                   + parameters.PIXWIDTH_BACKGROUND),
-                                                              right_edge=parameters.CCD_IMSIZE)
+                                                              right_edge=image.data.shape[1])
         spectrum.atmospheric_lines = atmospheric_lines
 
         # PSF2D deconvolution
@@ -441,8 +441,8 @@ class SpectractorShim:
 
         # not necessarily set during fit but required to be present for astropy
         # fits writing to work (required to be in keeping with upstream)
-        spectrum.data_order2 = np.zeros_like(spectrum.lambdas_order2)
-        spectrum.err_order2 = np.zeros_like(spectrum.lambdas_order2)
+        spectrum.data_order2 = np.zeros_like(spectrum.lambdas)
+        spectrum.err_order2 = np.zeros_like(spectrum.lambdas)
 
         # Full forward model extraction:
         # adds transverse ADR and order 2 subtraction
@@ -459,8 +459,6 @@ class SpectractorShim:
         parameters.DISPLAY = True
         if parameters.VERBOSE and parameters.DISPLAY:
             spectrum.plot_spectrum(xlim=None)
-
-        spectrum.chromatic_psf.table['lambdas'] = spectrum.lambdas
 
         result = Spectraction()
         result.spectrum = spectrum
