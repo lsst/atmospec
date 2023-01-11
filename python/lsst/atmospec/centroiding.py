@@ -143,6 +143,7 @@ class SingleStarCentroidTask(pipeBase.PipelineTask):
         # there's a better way of doing this with the task I think
         originalFilterLabel = inputExp.getFilter()
         inputExp.setFilter(referenceFilterLabel)
+        originalWcs = inputExp.getWcs()
 
         successfulFit = False
         try:
@@ -151,7 +152,7 @@ class SingleStarCentroidTask(pipeBase.PipelineTask):
             inputExp.setFilter(originalFilterLabel)
             if scatter < 1:
                 successfulFit = True
-        except (RuntimeError, TaskError, IndexError, ValueError, AttributeError):
+        except (RuntimeError, TaskError, IndexError, ValueError, AttributeError) as e:
             # IndexError raised for low source counts:
             # index 0 is out of bounds for axis 0 with size 0
 
@@ -159,9 +160,11 @@ class SingleStarCentroidTask(pipeBase.PipelineTask):
             # seen when refcat source count is low (but non-zero)
 
             # AttributeError: 'NoneType' object has no attribute 'asArcseconds'
-            # when the result is a failure
-            self.log.warn("Solver failed to run completely")
-            inputExp.setFilter(originalFilterLabel)
+            # when the result is a failure as the wcs is set to None on failure
+            self.log.warn(f"Solving failed: {e}")
+            inputExp.setWcs(originalWcs)  # this is set to None when the fit fails, so restore it
+        finally:
+            inputExp.setFilter(originalFilterLabel)  # always restore this
 
         centroid = None
         if successfulFit:
