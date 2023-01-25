@@ -513,7 +513,7 @@ def getLinearStagePosition(exp):
     return linearStagePosition
 
 
-def runNotebook(dataId, outputCollection, taskConfigs={}, configOptions={}):
+def runNotebook(dataId, outputCollection, taskConfigs={}, configOptions={}, embargo=False):
     """Run the ProcessStar pipeline for a single dataId, writing to the
     specified output collection.
 
@@ -536,6 +536,8 @@ def runNotebook(dataId, outputCollection, taskConfigs={}, configOptions={}):
         ``configOptions`` dict is the relevant task label. The value
         of ``configOptions`` is another dict that contains config
         key/value overrides to apply.
+    embargo : `bool`, optional
+        Use the embargo repo?
 
     Returns
     -------
@@ -560,7 +562,7 @@ def runNotebook(dataId, outputCollection, taskConfigs={}, configOptions={}):
                        "instrument='LATISS'")
 
         return queryString
-    repo = '/repo/main'
+    repo = "LATISS" if not embargo else "/repo/embargo"
 
     # TODO: use LATISS_DEFAULT_COLLECTIONS here?
     butler = SimplePipelineExecutor.prep_butler(repo,
