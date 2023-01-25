@@ -569,7 +569,7 @@ def runNotebook(dataId, outputCollection, taskConfigs={}, configOptions={}, emba
                                                 inputs=['LATISS/raw/all',
                                                         'refcats',
                                                         'LATISS/calib',
-                                                        'LATISS/calib/DM-32209'],
+                                                        ],
                                                 output=outputCollection)
 
     pipeline = Pipeline.fromFile("${ATMOSPEC_DIR}/pipelines/processStar.yaml")
