@@ -796,27 +796,9 @@ class ProcessStarTask(pipeBase.PipelineTask):
 
         self.log.info("Finished processing %s" % (dataIdDict))
 
-        # self.makeResultPickleable(spectraction)
-
         return pipeBase.Struct(spectractorSpectrum=spectraction.spectrum,
                                spectractorImage=spectraction.image,
                                spectraction=spectraction)
-
-    def makeResultPickleable(self, result):
-        """Remove unpicklable components from the output"""
-        result.image.target.build_sed = None
-        result.spectrum.target.build_sed = None
-        result.image.target.sed = None
-        result.spectrum.disperser.load_files = None
-        result.image.disperser.load_files = None
-
-        result.spectrum.disperser.N_fit = None
-        result.spectrum.disperser.N_interp = None
-        result.spectrum.disperser.ratio_order_2over1 = None
-        result.spectrum.disperser.theta = None
-
-        result.image.disperser.load_specs = None
-        result.spectrum.disperser.load_specs = None
 
     def runAstrometry(self, butler, exp, icSrc):
         refObjLoaderConfig = ReferenceObjectLoader.ConfigClass()
