@@ -184,7 +184,8 @@ class SpectractorShim:
             newY = dmXpos
             return newX, newY
         image.target_guess = _translateCentroid(xpos, ypos)
-        self.debugPrintTargetCentroidValue(image)
+        if parameters.DEBUG:
+            self.debugPrintTargetCentroidValue(image)
 
         self._setReadNoiseFromExp(image, exp, 1)
         # xxx remove hard coding of 1 below!
