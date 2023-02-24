@@ -24,6 +24,7 @@ __all__ = [
     "gainFromFlatPair",
     "getAmpReadNoiseFromRawExp",
     "getLinearStagePosition",
+    "getFilterAndDisperserFromExp",
     "getSamplePoints",
     "getTargetCentroidFromWcs",
     "isDispersedDataId",
@@ -45,7 +46,6 @@ import lsst.afw.geom as afwGeom
 import lsst.geom as geom
 import lsst.daf.butler as dafButler
 from astro_metadata_translator import ObservationInfo
-# from lsst.afw.cameraGeom import PIXELS, FOCAL_PLANE  XXX remove if unneeded
 import lsst.pex.config as pexConfig
 from lsst.pipe.base import Pipeline
 from lsst.obs.lsst.translators.lsst import FILTER_DELIMITER
@@ -506,12 +506,22 @@ def isDispersedDataId(dataId, butler):
 
 def getLinearStagePosition(exp):
     md = exp.getMetadata()
-    linearStagePosition = 113  # this seems to be the rough zero-point for some reason
+    linearStagePosition = 115  # this seems to be the rough zero-point for some reason
     if 'LINSPOS' in md:
         position = md['LINSPOS']  # linear stage position in mm from CCD, larger->further from CCD
         if position is not None:
             linearStagePosition += position
     return linearStagePosition
+
+
+def getFilterAndDisperserFromExp(exp):
+    filterFullName = exp.getFilter().physicalLabel
+    if FILTER_DELIMITER not in filterFullName:
+        filt = filterFullName
+        grating = exp.getInfo().getMetadata()['GRATING']
+    else:
+        filt, grating = filterFullName.split(FILTER_DELIMITER)
+    return filt, grating
 
 
 def runNotebook(dataId, outputCollection, taskConfigs={}, configOptions={}, embargo=False):

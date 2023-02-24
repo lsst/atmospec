@@ -40,7 +40,7 @@ from spectractor.extractor.extractor import (FullForwardModelFitWorkspace,  # no
 from spectractor.extractor.spectrum import Spectrum, calibrate_spectrum  # noqa: E402
 
 from lsst.daf.base import DateTime  # noqa: E402
-from lsst.obs.lsst.translators.lsst import FILTER_DELIMITER  # noqa: E402
+from .utils import getFilterAndDisperserFromExp  # noqa: E402
 
 
 class SpectractorShim:
@@ -208,19 +208,9 @@ class SpectractorShim:
 
         return image
 
-    @staticmethod
-    def _getFilterAndDisperserFromExp(exp):
-        filterFullName = exp.getFilter().physicalLabel
-        if FILTER_DELIMITER not in filterFullName:
-            filt = filterFullName
-            grating = exp.getInfo().getMetadata()['GRATING']
-        else:
-            filt, grating = filterFullName.split(FILTER_DELIMITER)
-        return filt, grating
-
     def _setImageAndHeaderInfo(self, image, exp, useVisitInfo=True):
         # currently set in spectractor.tools.extract_info_from_CTIO_header()
-        filt, disperser = self._getFilterAndDisperserFromExp(exp)
+        filt, disperser = getFilterAndDisperserFromExp(exp)
 
         image.header.filter = filt
         image.header.disperser_label = disperser
@@ -364,7 +354,7 @@ class SpectractorShim:
         xpos = int(np.round(xpos))
         ypos = int(np.round(ypos))
 
-        filter_label, disperser = self._getFilterAndDisperserFromExp(exp)
+        filter_label, disperser = getFilterAndDisperserFromExp(exp)
         image = self.spectractorImageFromLsstExposure(exp, xpos, ypos, target_label=target,
                                                       disperser_label=disperser,
                                                       filter_label=filter_label)

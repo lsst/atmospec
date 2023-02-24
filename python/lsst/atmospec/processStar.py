@@ -42,7 +42,7 @@ from lsst.meas.astrom import AstrometryTask, FitAffineWcsTask
 import lsst.afw.detection as afwDetect
 
 from .spectraction import SpectractorShim
-from .utils import getLinearStagePosition, isDispersedExp
+from .utils import getLinearStagePosition, isDispersedExp, getFilterAndDisperserFromExp
 
 COMMISSIONING = False  # allows illegal things for on the mountain usage.
 
@@ -768,6 +768,12 @@ class ProcessStarTask(pipeBase.PipelineTask):
         # TODO: think if this is the right place for this
         # probably wants to go in spectraction.py really
         linearStagePosition = getLinearStagePosition(inputExp)
+        _, grating = getFilterAndDisperserFromExp(inputExp)
+        if grating == 'holo_003':
+            # the hologram is sealed with a 4 mm window and this is how
+            # spectractor handles this, so while it's quite ugly, do this to
+            # keep the behaviour the same for now.
+            linearStagePosition += 4  # hologram is sealed with a 4 mm window
         overrideDict['DISTANCE2CCD'] = linearStagePosition
 
         target = inputExp.visitInfo.object
