@@ -88,12 +88,6 @@ class ProcessStarTaskConnections(pipeBase.PipelineTaskConnections,
         storageClass="SpectractorImage",
         dimensions=("instrument", "visit", "detector"),
     )
-    spectraction = cT.Output(
-        name="spectraction",
-        doc="The Spectractor output image.",
-        storageClass="Spectraction",
-        dimensions=("instrument", "visit", "detector"),
-    )
 
     def __init__(self, *, config=None):
         super().__init__(config=config)
