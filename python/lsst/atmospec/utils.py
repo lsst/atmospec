@@ -469,7 +469,18 @@ def vizierLocationForTarget(exp, target, doMotionCorrection):
 
 
 def isDispersedExp(exp):
-    """Check if an exposure is dispersed."""
+    """Check if an exposure is dispersed.
+
+    Parameters
+    ----------
+    exp : `lsst.afw.image.Exposure`
+        The exposure.
+
+    Returns
+    -------
+    isDispersed : `bool`
+        Whether it is a dispersed image or not.
+    """
     filterFullName = exp.filter.physicalLabel
     if FILTER_DELIMITER not in filterFullName:
         raise RuntimeError(f"Error parsing filter name {filterFullName}")
@@ -480,7 +491,20 @@ def isDispersedExp(exp):
 
 
 def isDispersedDataId(dataId, butler):
-    """Check if a dataId corresponds to a dispersed image."""
+    """Check if a dataId corresponds to a dispersed image.
+
+    Parameters
+    ----------
+    dataId : `dict`
+        The dataId.
+    butler : `lsst.daf.butler.Butler`
+        The butler.
+
+    Returns
+    -------
+    isDispersed : `bool`
+        Whether it is a dispersed image or not.
+    """
     if isinstance(butler, dafButler.Butler):
         # TODO: DM-38265 Need to make this work with DataCoords
         assert 'day_obs' in dataId or 'exposure.day_obs' in dataId, f'failed to find day_obs in {dataId}'
@@ -505,6 +529,18 @@ def isDispersedDataId(dataId, butler):
 
 
 def getLinearStagePosition(exp):
+    """Get the linear stage position.
+
+    Parameters
+    ----------
+    exp : `lsst.afw.image.Exposure`
+        The exposure.
+
+    Returns
+    -------
+    position : `float`
+        The position of the linear stage, in mm.
+    """
     md = exp.getMetadata()
     linearStagePosition = 115  # this seems to be the rough zero-point for some reason
     if 'LINSPOS' in md:
@@ -515,6 +551,18 @@ def getLinearStagePosition(exp):
 
 
 def getFilterAndDisperserFromExp(exp):
+    """Get the filter and disperser from an exposure.
+
+    Parameters
+    ----------
+    exp : `lsst.afw.image.Exposure`
+        The exposure.
+
+    Returns
+    -------
+    filter, disperser : `tuple` of `str`
+        The filter and the disperser names, as strings.
+    """
     filterFullName = exp.getFilter().physicalLabel
     if FILTER_DELIMITER not in filterFullName:
         filt = filterFullName

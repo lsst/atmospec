@@ -634,6 +634,20 @@ class ProcessStarTask(pipeBase.PipelineTask):
         return source.getCentroid()
 
     def updateMetadata(self, exp, **kwargs):
+        """Update an exposure's metadata with set items from the visit info.
+
+        Spectractor expects many items, like the hour angle and airmass, to be
+        in the metadata, so pull them out of the visit info etc and put them
+        into the main metadata. Also updates the metadata with any supplied
+        kwargs.
+
+        Parameters
+        ----------
+        exp : `lsst.afw.image.Exposure`
+            The exposure to update.
+        **kwargs : `dict`
+            The items to add.
+        """
         md = exp.getMetadata()
         vi = exp.getInfo().getVisitInfo()
 
@@ -668,6 +682,22 @@ class ProcessStarTask(pipeBase.PipelineTask):
         butlerQC.put(outputs, outputRefs)
 
     def getNormalizedTargetName(self, target):
+        """Normalize the name of the target.
+
+        All targets which start with 'spec:' are converted to the name of the
+        star without the leading 'spec:'. Any objects with mappings defined in
+        data/nameMappings.txt are converted to the mapped name.
+
+        Parameters
+        ----------
+        target : `str`
+            The name of the target.
+
+        Returns
+        -------
+        normalizedTarget : `str`
+            The normalized name of the target.
+        """
         target = target.replace('spec:', '')
 
         nameMappingsFile = os.path.join(getPackageDir('atmospec'), 'data', 'nameMappings.txt')
@@ -852,6 +882,20 @@ class ProcessStarTask(pipeBase.PipelineTask):
         return
 
     def loadStarNames(self):
+        """Get the objects which should be treated as stars which do not begin
+        with HD.
+
+        Spectractor treats all objects which start HD as stars, and all which
+        don't as calibration objects, e.g. arc lamps or planetary nebulae.
+        Adding items to data/starNames.txt will cause them to be treated as
+        regular stars.
+
+        Returns
+        -------
+        starNames : `list` of `str`
+            The list of all objects to be treated as stars despite not starting
+            with HD.
+        """
         starNameFile = os.path.join(getPackageDir('atmospec'), 'data', 'starNames.txt')
         with open(starNameFile, 'r') as f:
             lines = f.readlines()
@@ -911,9 +955,3 @@ class ProcessStarTask(pipeBase.PipelineTask):
 
         bbox = geom.Box2I(geom.Point2I(xStart, yStart), geom.Point2I(xEnd, yEnd))
         return bbox
-
-        # def calcRidgeLine(self, footprint):
-        #     ridgeLine = np.zeros(self.footprint.length)
-        #     for
-
-        #     return ridgeLine

@@ -77,9 +77,9 @@ class SpectractorShim:
 
         Parameters
         ----------
-            overrides : `dict`
-        Dict of overrides to apply. Warning is logged if keys are found that do
-        not map to existing Spectractor parameters.
+        overrides : `dict`
+            Dict of overrides to apply. Warning is logged if keys are found
+            that do not map to existing Spectractor parameters.
         """
         for k, v in overrides.items():
             # NB do not use hasattr(parameters, k) here, as this is broken by
@@ -98,9 +98,9 @@ class SpectractorShim:
 
         Parameters
         ----------
-            supplementaryItems : `dict`
-        Dict of parameters to add. Warning is logged if keys already exist,
-        as these should be overridden rather than supplemented.
+        supplementaryItems : `dict`
+            Dict of parameters to add. Warning is logged if keys already exist,
+            as these should be overridden rather than supplemented.
         """
         # NB avoid using the variable name `parameters` in this method
         # due to scope collision
@@ -134,11 +134,19 @@ class SpectractorShim:
 
     @staticmethod
     def dumpParameters():
+        """Print all the values in Spectractor's parameters module."""
         for item in dir(parameters):
             if not item.startswith("__"):
                 print(item, getattr(parameters, item))
 
     def debugPrintTargetCentroidValue(self, image):
+        """Print the positions and values of the centroid for debug purposes.
+
+        Parameters
+        ----------
+        image : `spectractor.extractor.images.Image`
+            The image.
+        """
         x, y = image.target_guess
         self.log.debug(f"Image shape = {image.data.shape}")
         self.log.debug(f"x, y = {x}, {y}")
@@ -154,6 +162,26 @@ class SpectractorShim:
         them and set the values using the return rather than modifying the
         object in place where possible. Where this is not possible the methods
         are labeled _setSomething().
+
+        Parameters
+        ----------
+        exp : `lsst.afw.image.Exposure`
+            The exposure to construct the image from.
+        xpos : `float`
+            The x position of the star's centroid.
+        ypos : `float`
+            The y position of the star's centroid.
+        target_label : `str`, optional
+            The name of the object, e.g. HD12345.
+        disperser_label : `str`, optional
+            The name of the dispersed, e.g. 'holo_003'
+        filter_label : `str`, optional
+            The name of the filter, e.g. 'SDSSi'
+
+        Returns
+        -------
+        image : `spectractor.extractor.images.Image`
+            The image.
         """
         # TODO: passing exact centroids seems to be causing a serious
         # and non-obvious problem!
