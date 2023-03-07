@@ -180,6 +180,9 @@ class SpectractorShim:
         image.data = self._getImageData(exp)
 
         def _translateCentroid(dmXpos, dmYpos):
+            # this function was necessary when we were sometimes transposing
+            # and sometimes not. If we decide to always/never transpose then
+            # this function can just be removed.
             newX = dmYpos
             newY = dmXpos
             return newX, newY
