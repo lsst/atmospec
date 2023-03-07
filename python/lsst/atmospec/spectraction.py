@@ -347,10 +347,11 @@ class SpectractorShim:
 
         # Upstream loads config file here
 
-        # TODO: passing exact centroids seems to be causing a serious
-        # and non-obvious problem!
-        # this needs fixing for several reasons, mostly because if we have a
-        # known good centroid then we want to skip the refitting entirely
+        # TODO: DM-38264:
+        # passing exact centroids seems to be causing a serious
+        # and non-obvious problem! this needs fixing for several reasons,
+        # mostly because if we have a known good centroid then we want to skip
+        # the refitting entirely
         xpos = int(np.round(xpos))
         ypos = int(np.round(ypos))
 
