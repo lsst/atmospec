@@ -185,7 +185,7 @@ class ProcessStarTaskConfig(pipeBase.PipelineTaskConfig,
         doc="Prior on the reliability of the centroid estimate in pixels. "
         "PIXSHIFT_PRIOR internally.",
         default=5,
-        # XXX make this strictly greater than 0
+        check=lambda x: x > 0,
     )
     doFilterRotatedImage = pexConfig.Field(
         dtype=bool,
@@ -269,7 +269,7 @@ class ProcessStarTaskConfig(pipeBase.PipelineTaskConfig,
             1: "The first order spectrum in the positive y direction",
             -1: "The first order spectrum in the negative y direction",
             2: "The second order spectrum in the positive y direction",
-            -2: "The first order spectrum in the negative y direction",
+            -2: "The second order spectrum in the negative y direction",
         }
     )
     signalWidth = pexConfig.Field(  # TODO: change this to be set wrt the focus/seeing, i.e. FWHM from imChar
