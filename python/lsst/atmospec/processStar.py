@@ -104,8 +104,7 @@ class ProcessStarTaskConfig(pipeBase.PipelineTaskConfig,
         default="fit",
         allowed={
             # TODO: probably want an "auto" mode
-            # XXX MFL: probably want to rename "guess" to "exact" for DM.
-            "guess": "Use a given input value as source of truth.",
+            "exact": "Use a given input value as source of truth.",
             "fit": "Fit a 2d Moffat model to the target.",
             "WCS": "Use the target's catalog location and the image's wcs.",
         }
@@ -689,7 +688,8 @@ class ProcessStarTask(pipeBase.PipelineTask):
 
         overrideDict = {
             # normal config parameters
-            'SPECTRACTOR_FIT_TARGET_CENTROID': self.config.targetCentroidMethod,
+            'SPECTRACTOR_FIT_TARGET_CENTROID': ('guess' if self.config.targetCentroidMethod == 'exact'
+                                                else self.config.targetCentroidMethod),
             'SPECTRACTOR_COMPUTE_ROTATION_ANGLE': self.config.rotationAngleMethod,
             'SPECTRACTOR_DECONVOLUTION_PSF2D': self.config.doDeconvolveSpectrum,
             'SPECTRACTOR_DECONVOLUTION_FFM': self.config.doFullForwardModelDeconvolution,
