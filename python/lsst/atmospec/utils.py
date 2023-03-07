@@ -560,14 +560,9 @@ def runNotebook(dataId, outputCollection, taskConfigs={}, configOptions={}, emba
     Any ConfigurableInstances in supplied task config overrides will be
     ignored. Currently (see DM-XXXXX) this causes a RecursionError.
     """
-    # TODO move this to summit.utils to avoid the late import here which
-    # is required to avoid the cirucular import, and for this package to
-    # not depend on utils code.
-    import lsst.summit.utils.butlerUtils as butlerUtils
-
     def makeQuery(dataId):
-        dayObs = butlerUtils.getDayObs(dataId)
-        seqNum = butlerUtils.getSeqNum(dataId)
+        dayObs = dataId['day_obs'] if 'day_obs' in dataId else dataId['exposure.day_obs']
+        seqNum = dataId['seq_num'] if 'seq_num' in dataId else dataId['exposure.seq_num']
         queryString = (f"exposure.day_obs={dayObs} AND "
                        f"exposure.seq_num={seqNum} AND "
                        "instrument='LATISS'")
@@ -612,7 +607,10 @@ def runNotebook(dataId, outputCollection, taskConfigs={}, configOptions={}, emba
     logging.basicConfig(level=logging.INFO, stream=sys.stdout)
     quanta = executor.run()
 
-    butler = butlerUtils.makeDefaultLatissButler(extraCollections=[outputCollection])
-    spectractionQuantum = quanta[3]
-    result = butler.get(spectractionQuantum.outputs['spectractorSpectrum'][0])
+    # quanta is just a plain list, but the items know their names, so rather
+    # than just taking the third item and relying on that being the position in
+    # the pipeline we get the item by name
+    processStarQuantum = [q for q in quanta if q.taskName == 'lsst.atmospec.processStar.ProcessStarTask'][0]
+    dataRef = processStarQuantum.outputs['spectractorSpectrum'][0]
+    result = butler.get(dataRef)
     return result
