@@ -137,7 +137,7 @@ class ProcessStarTaskConfig(pipeBase.PipelineTaskConfig,
     )
     deconvolutionSigmaClip = pexConfig.Field(
         dtype=float,
-        doc="Deconvolve the spectrogram with full forward model? "
+        doc="Sigma clipping level for the deconvolution when fitting the full forward model? "
         "SPECTRACTOR_DECONVOLUTION_SIGMA_CLIP internally.",
         default=100,
     )
