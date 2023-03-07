@@ -409,7 +409,7 @@ class ProcessStarTaskConfig(pipeBase.PipelineTaskConfig,
     doDisplayPlots = pexConfig.Field(
         dtype=bool,
         doc="Matplotlib show() the plots, so they show up in a notebook or X window",
-        default=True
+        default=False
     )
     doSavePlots = pexConfig.Field(
         dtype=bool,
