@@ -482,7 +482,7 @@ def isDispersedExp(exp):
 def isDispersedDataId(dataId, butler):
     """Check if a dataId corresponds to a dispersed image."""
     if isinstance(butler, dafButler.Butler):
-        # TODO: Need to make this work with DataCoords XXX
+        # TODO: DM-38265 Need to make this work with DataCoords
         assert 'day_obs' in dataId or 'exposure.day_obs' in dataId, f'failed to find day_obs in {dataId}'
         assert 'seq_num' in dataId or 'exposure.seq_num' in dataId, f'failed to find seq_num in {dataId}'
         seq_num = dataId['seq_num'] if 'seq_num' in dataId else dataId['exposure.seq_num']
