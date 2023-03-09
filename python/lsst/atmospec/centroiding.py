@@ -143,6 +143,7 @@ class SingleStarCentroidTask(pipeBase.PipelineTask):
         # there's a better way of doing this with the task I think
         originalFilterLabel = inputExp.getFilter()
         inputExp.setFilter(referenceFilterLabel)
+        originalWcs = inputExp.getWcs()
 
         successfulFit = False
         try:
@@ -151,14 +152,28 @@ class SingleStarCentroidTask(pipeBase.PipelineTask):
             inputExp.setFilter(originalFilterLabel)
             if scatter < 1:
                 successfulFit = True
-        except (RuntimeError, TaskError):
-            self.log.warn("Solver failed to run completely")
-            inputExp.setFilter(originalFilterLabel)
+        except (RuntimeError, TaskError, IndexError, ValueError, AttributeError) as e:
+            # IndexError raised for low source counts:
+            # index 0 is out of bounds for axis 0 with size 0
 
+            # ValueError: negative dimensions are not allowed
+            # seen when refcat source count is low (but non-zero)
+
+            # AttributeError: 'NoneType' object has no attribute 'asArcseconds'
+            # when the result is a failure as the wcs is set to None on failure
+            self.log.warn(f"Solving failed: {e}")
+            inputExp.setWcs(originalWcs)  # this is set to None when the fit fails, so restore it
+        finally:
+            inputExp.setFilter(originalFilterLabel)  # always restore this
+
+        centroid = None
         if successfulFit:
-            target = inputExp.getMetadata()['OBJECT']
+            target = inputExp.visitInfo.object
             centroid = getTargetCentroidFromWcs(inputExp, target, logger=self.log)
-        else:
+            if not centroid:
+                successfulFit = False
+                self.log.warning(f'Failed to find target centroid for {target} via WCS')
+        if not centroid:
             result = self.qfmTask.run(inputExp)
             centroid = result.brightestObjCentroid
 

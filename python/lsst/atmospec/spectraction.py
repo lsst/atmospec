@@ -28,18 +28,19 @@ from astropy import units as u
 from spectractor import parameters
 parameters.CALLING_CODE = "LSST_DM"  # this must be set IMMEDIATELY to supress colored logs
 
-from spectractor.config import load_config  # noqa: E402
+from spectractor.config import load_config, apply_rebinning_to_parameters  # noqa: E402
 from spectractor.extractor.images import Image, find_target, turn_image  # noqa: E402
 
 from spectractor.extractor.dispersers import Hologram  # noqa: E402
 from spectractor.extractor.extractor import (FullForwardModelFitWorkspace,  # noqa: E402
                                              run_ffm_minimisation,  # noqa: E402
                                              extract_spectrum_from_image,
+                                             dumpParameters,
                                              run_spectrogram_deconvolution_psf2d)
 from spectractor.extractor.spectrum import Spectrum, calibrate_spectrum  # noqa: E402
 
 from lsst.daf.base import DateTime  # noqa: E402
-from lsst.obs.lsst.translators.lsst import FILTER_DELIMITER  # noqa: E402
+from .utils import getFilterAndDisperserFromExp  # noqa: E402
 
 
 class SpectractorShim:
@@ -47,14 +48,13 @@ class SpectractorShim:
 
     This is designed to provide an implementation of the top-level function in
     Spectractor.spectractor.extractor.extractor.Spectractor()."""
-    TRANSPOSE = True
 
     # leading * for kwargs only in constructor
     def __init__(self, *, configFile=None, paramOverrides=None, supplementaryParameters=None,
                  resetParameters=None):
         if configFile:
             print(f"Loading config from {configFile}")
-            load_config(configFile)
+            load_config(configFile, rebin=False)
         self.log = logging.getLogger(__name__)
         if paramOverrides is not None:
             self.overrideParameters(paramOverrides)
@@ -62,6 +62,11 @@ class SpectractorShim:
             self.supplementParameters(supplementaryParameters)
         if resetParameters is not None:
             self.resetParameters(resetParameters)
+
+        if parameters.DEBUG:
+            self.log.debug('Parameters pre-rebinning:')
+            dumpParameters()
+
         return
 
     def overrideParameters(self, overrides):
@@ -72,9 +77,9 @@ class SpectractorShim:
 
         Parameters
         ----------
-            overrides : `dict`
-        Dict of overrides to apply. Warning is logged if keys are found that do
-        not map to existing Spectractor parameters.
+        overrides : `dict`
+            Dict of overrides to apply. Warning is logged if keys are found
+            that do not map to existing Spectractor parameters.
         """
         for k, v in overrides.items():
             # NB do not use hasattr(parameters, k) here, as this is broken by
@@ -93,9 +98,9 @@ class SpectractorShim:
 
         Parameters
         ----------
-            supplementaryItems : `dict`
-        Dict of parameters to add. Warning is logged if keys already exist,
-        as these should be overridden rather than supplemented.
+        supplementaryItems : `dict`
+            Dict of parameters to add. Warning is logged if keys already exist,
+            as these should be overridden rather than supplemented.
         """
         # NB avoid using the variable name `parameters` in this method
         # due to scope collision
@@ -129,26 +134,70 @@ class SpectractorShim:
 
     @staticmethod
     def dumpParameters():
+        """Print all the values in Spectractor's parameters module."""
         for item in dir(parameters):
             if not item.startswith("__"):
                 print(item, getattr(parameters, item))
 
-    def spectractorImageFromLsstExposure(self, exp, *, target_label='', disperser_label='', filter_label=''):
+    def debugPrintTargetCentroidValue(self, image):
+        """Print the positions and values of the centroid for debug purposes.
+
+        Parameters
+        ----------
+        image : `spectractor.extractor.images.Image`
+            The image.
+        """
+        x, y = image.target_guess
+        self.log.debug(f"Image shape = {image.data.shape}")
+        self.log.debug(f"x, y = {x}, {y}")
+        x = int(np.round(x))
+        y = int(np.round(y))
+        self.log.debug(f"Value at {x}, {y} = {image.data[y, x]}")
+
+    def spectractorImageFromLsstExposure(self, exp, xpos, ypos, *, target_label='',
+                                         disperser_label='', filter_label=''):
         """Construct a Spectractor Image object from LSST objects.
 
         Internally we try to use functions that calculate things and return
         them and set the values using the return rather than modifying the
         object in place where possible. Where this is not possible the methods
         are labeled _setSomething().
+
+        Parameters
+        ----------
+        exp : `lsst.afw.image.Exposure`
+            The exposure to construct the image from.
+        xpos : `float`
+            The x position of the star's centroid.
+        ypos : `float`
+            The y position of the star's centroid.
+        target_label : `str`, optional
+            The name of the object, e.g. HD12345.
+        disperser_label : `str`, optional
+            The name of the dispersed, e.g. 'holo_003'
+        filter_label : `str`, optional
+            The name of the filter, e.g. 'SDSSi'
+
+        Returns
+        -------
+        image : `spectractor.extractor.images.Image`
+            The image.
         """
+        # TODO: passing exact centroids seems to be causing a serious
+        # and non-obvious problem!
+        # this needs fixing for several reasons, mostly because if we have a
+        # known good centroid then we want to skip the refitting entirely
+        xpos = int(np.round(xpos))
+        ypos = int(np.round(ypos))
+        self.log.debug(f'DM value at centroid: {exp.image.array[ypos, xpos]}\n')
+
+        # make a blank image, with the filter/disperser set
         image = Image(file_name='', target_label=target_label, disperser_label=disperser_label,
                       filter_label=filter_label)
 
         vi = exp.getInfo().getVisitInfo()
         rotAngle = vi.getBoresightRotAngle().asDegrees()
-        # line below correct if not rotating 90 XXX remove this once resolved
-        # parameters.OBS_CAMERA_ROTATION = 180 - (rotAngle % 360)
-        parameters.OBS_CAMERA_ROTATION = 90 - (rotAngle % 360)
+        parameters.OBS_CAMERA_ROTATION = 270 - (rotAngle % 360)
 
         radec = vi.getBoresightRaDec()
         image.ra = asCoords.Angle(radec.getRa().asDegrees(), unit="deg")
@@ -157,6 +206,18 @@ class SpectractorShim:
         image.hour_angle = asCoords.Angle(ha, unit="deg")
 
         image.data = self._getImageData(exp)
+
+        def _translateCentroid(dmXpos, dmYpos):
+            # this function was necessary when we were sometimes transposing
+            # and sometimes not. If we decide to always/never transpose then
+            # this function can just be removed.
+            newX = dmYpos
+            newY = dmXpos
+            return newX, newY
+        image.target_guess = _translateCentroid(xpos, ypos)
+        if parameters.DEBUG:
+            self.debugPrintTargetCentroidValue(image)
+
         self._setReadNoiseFromExp(image, exp, 1)
         # xxx remove hard coding of 1 below!
         image.gain = self._setGainFromExp(image, exp, .85)  # gain required for calculating stat err
@@ -178,19 +239,9 @@ class SpectractorShim:
 
         return image
 
-    @staticmethod
-    def _getFilterAndDisperserFromExp(exp):
-        filterFullName = exp.getFilter().physicalLabel
-        if FILTER_DELIMITER not in filterFullName:
-            filt = filterFullName
-            grating = exp.getInfo().getMetadata()['GRATING']
-        else:
-            filt, grating = filterFullName.split(FILTER_DELIMITER)
-        return filt, grating
-
     def _setImageAndHeaderInfo(self, image, exp, useVisitInfo=True):
         # currently set in spectractor.tools.extract_info_from_CTIO_header()
-        filt, disperser = self._getFilterAndDisperserFromExp(exp)
+        filt, disperser = getFilterAndDisperserFromExp(exp)
 
         image.header.filter = filt
         image.header.disperser_label = disperser
@@ -220,11 +271,12 @@ class SpectractorShim:
 
         return
 
-    def _getImageData(self, exp):
-        if self.TRANSPOSE:
-            # return exp.maskedImage.image.array.T[:, ::-1]
-            return np.rot90(exp.maskedImage.image.array, 1)
-        return exp.maskedImage.image.array
+    def _getImageData(self, exp, trimToSquare=False):
+        if trimToSquare:
+            data = exp.image.array[0:4000, 0:4000]
+        else:
+            data = exp.image.array
+        return data.T[::, ::]
 
     def _setReadNoiseFromExp(self, spectractorImage, exp, constValue=None):
         # xxx need to implement this properly
@@ -275,11 +327,6 @@ class SpectractorShim:
 
     @staticmethod
     def transposeCentroid(dmXpos, dmYpos, image):
-        # xSize, ySize = image.data.shape
-        # newX = dmXpos
-        # newY = ySize - dmYpos  # image is also flipped in Y
-        # return newY, newX
-
         xSize, ySize = image.data.shape
         newX = dmYpos
         newY = xSize - dmXpos
@@ -313,7 +360,7 @@ class SpectractorShim:
         _temperature = weather.getAirTemperature()
         temperature = _temperature if not np.isnan(_temperature) else 10  # maybe average?
         _pressure = weather.getAirPressure()
-        pressure = _pressure if not np.isnan(_pressure) else 732  # nominal for altitude?
+        pressure = _pressure if not np.isnan(_pressure) else 743  # nominal for altitude?
         _humidity = weather.getHumidity()
         humidity = _humidity if not np.isnan(_humidity) else None  # not a required param so no default
 
@@ -331,24 +378,24 @@ class SpectractorShim:
 
         # Upstream loads config file here
 
-        # TODO: passing exact centroids seems to be causing a serious
-        # and non-obvious problem!
-        # this needs fixing for several reasons, mostly because if we have a
-        # known good centroid then we want to skip the refitting entirely
+        # TODO: DM-38264:
+        # passing exact centroids seems to be causing a serious
+        # and non-obvious problem! this needs fixing for several reasons,
+        # mostly because if we have a known good centroid then we want to skip
+        # the refitting entirely
         xpos = int(np.round(xpos))
         ypos = int(np.round(ypos))
 
-        filter_label, disperser = self._getFilterAndDisperserFromExp(exp)
-        image = self.spectractorImageFromLsstExposure(exp, target_label=target, disperser_label=disperser,
+        filter_label, disperser = getFilterAndDisperserFromExp(exp)
+        image = self.spectractorImageFromLsstExposure(exp, xpos, ypos, target_label=target,
+                                                      disperser_label=disperser,
                                                       filter_label=filter_label)
 
-        if self.TRANSPOSE:
-            xpos, ypos = self.transposeCentroid(xpos, ypos, image)
-
-        image.target_guess = (xpos, ypos)
         if parameters.DEBUG:
-            image.plot_image(scale='log10', target_pixcoords=image.target_guess)
-            self.log.info(f"Pixel value at centroid = {image.data[int(ypos), int(xpos)]}")
+            self.debugPrintTargetCentroidValue(image)
+            title = 'Raw image with input target location'
+            image.plot_image(scale='symlog', target_pixcoords=image.target_guess, title=title)
+            self.log.info(f"Pixel value at centroid = {image.data[int(xpos), int(ypos)]}")
 
         # XXX this needs removing or at least dealing with to not always
         # just run! ASAP XXX
@@ -357,33 +404,40 @@ class SpectractorShim:
         #     image, xpos, ypos = self.flipImageLeftRight(image, xpos, ypos)
         #     self.displayImage(image, centroid=(xpos, ypos))
 
-        # Use fast mode
         if parameters.CCD_REBIN > 1:
             self.log.info(f'Rebinning image with rebin of {parameters.CCD_REBIN}')
-            # TODO: Fix bug here where the passed parameter isn't used!
+            apply_rebinning_to_parameters()
             image.rebin()
             if parameters.DEBUG:
-                image.plot_image(scale='symlog', target_pixcoords=image.target_guess)
+                self.log.info('Parameters post-rebinning:')
+                dumpParameters()
+                self.debugPrintTargetCentroidValue(image)
+                title = 'Rebinned image with input target location'
+                image.plot_image(scale='symlog', target_pixcoords=image.target_guess, title=title)
+                self.log.debug('Post rebin:')
+                self.debugPrintTargetCentroidValue(image)
 
         # image turning and target finding - use LSST code instead?
         # and if not, at least test how the rotation code compares
         # this part of Spectractor is certainly slow at the very least
         if True:  # TODO: change this to be an option, at least for testing vs LSST
             self.log.info('Search for the target in the image...')
-            _ = find_target(image, image.target_guess)  # sets the image.target_pixcoords
+            # sets the image.target_pixcoords
+            _ = find_target(image, image.target_guess, widths=(parameters.XWINDOW, parameters.YWINDOW))
             turn_image(image)  # creates the rotated data, and sets the image.target_pixcoords_rotated
 
             # Rotate the image: several methods
             # Find the exact target position in the rotated image:
             # several methods - but how are these controlled? MFL
             self.log.info('Search for the target in the rotated image...')
-            _ = find_target(image, image.target_guess, rotated=True)
+            _ = find_target(image, image.target_guess, rotated=True,
+                            widths=(parameters.XWINDOW_ROT, parameters.YWINDOW_ROT))
         else:
             # code path for if the image is pre-rotated by LSST code
             raise NotImplementedError
 
         # Create Spectrum object
-        spectrum = Spectrum(image=image, order=parameters.SPEC_ORDER)  # XXX new in DM-33589 check SPEC_ORDER
+        spectrum = Spectrum(image=image, order=parameters.SPEC_ORDER)
         self.setAdrParameters(spectrum, exp)
 
         # Subtract background and bad pixels
@@ -392,7 +446,7 @@ class SpectractorShim:
                                                               ws=(parameters.PIXDIST_BACKGROUND,
                                                                   parameters.PIXDIST_BACKGROUND
                                                                   + parameters.PIXWIDTH_BACKGROUND),
-                                                              right_edge=parameters.CCD_IMSIZE)
+                                                              right_edge=image.data.shape[1])
         spectrum.atmospheric_lines = atmospheric_lines
 
         # PSF2D deconvolution
@@ -400,6 +454,7 @@ class SpectractorShim:
             run_spectrogram_deconvolution_psf2d(spectrum, bgd_model_func=bgd_model_func)
 
         # Calibrate the spectrum
+        self.log.info(f'Calibrating order {spectrum.order:d} spectrum...')
         with_adr = True
         if parameters.OBS_OBJECT_TYPE != "STAR":
             # XXX Check what this is set to, and how
@@ -409,8 +464,8 @@ class SpectractorShim:
 
         # not necessarily set during fit but required to be present for astropy
         # fits writing to work (required to be in keeping with upstream)
-        spectrum.data_order2 = np.zeros_like(spectrum.lambdas_order2)
-        spectrum.err_order2 = np.zeros_like(spectrum.lambdas_order2)
+        spectrum.data_order2 = np.zeros_like(spectrum.lambdas)
+        spectrum.err_order2 = np.zeros_like(spectrum.lambdas)
 
         # Full forward model extraction:
         # adds transverse ADR and order 2 subtraction
@@ -427,8 +482,6 @@ class SpectractorShim:
         parameters.DISPLAY = True
         if parameters.VERBOSE and parameters.DISPLAY:
             spectrum.plot_spectrum(xlim=None)
-
-        spectrum.chromatic_psf.table['lambdas'] = spectrum.lambdas
 
         result = Spectraction()
         result.spectrum = spectrum

@@ -42,7 +42,7 @@ from lsst.meas.astrom import AstrometryTask, FitAffineWcsTask
 import lsst.afw.detection as afwDetect
 
 from .spectraction import SpectractorShim
-from .utils import getLinearStagePosition
+from .utils import getLinearStagePosition, isDispersedExp, getFilterAndDisperserFromExp
 
 COMMISSIONING = False  # allows illegal things for on the mountain usage.
 
@@ -88,12 +88,6 @@ class ProcessStarTaskConnections(pipeBase.PipelineTaskConnections,
         storageClass="SpectractorImage",
         dimensions=("instrument", "visit", "detector"),
     )
-    spectraction = cT.Output(
-        name="spectraction",
-        doc="The Spectractor output image.",
-        storageClass="Spectraction",
-        dimensions=("instrument", "visit", "detector"),
-    )
 
     def __init__(self, *, config=None):
         super().__init__(config=config)
@@ -102,7 +96,288 @@ class ProcessStarTaskConnections(pipeBase.PipelineTaskConnections,
 class ProcessStarTaskConfig(pipeBase.PipelineTaskConfig,
                             pipelineConnections=ProcessStarTaskConnections):
     """Configuration parameters for ProcessStarTask."""
-
+    # Spectractor parameters:
+    targetCentroidMethod = pexConfig.ChoiceField(
+        dtype=str,
+        doc="Method to get target centroid. "
+        "SPECTRACTOR_FIT_TARGET_CENTROID internally.",
+        default="fit",
+        allowed={
+            # TODO: probably want an "auto" mode
+            "exact": "Use a given input value as source of truth.",
+            "fit": "Fit a 2d Moffat model to the target.",
+            "WCS": "Use the target's catalog location and the image's wcs.",
+        }
+    )
+    rotationAngleMethod = pexConfig.ChoiceField(
+        dtype=str,
+        doc="Method used to get the image rotation angle. "
+        "SPECTRACTOR_COMPUTE_ROTATION_ANGLE internally.",
+        default="disperser",
+        allowed={
+            # XXX MFL: probably need to use setDefaults to set this based on
+            # the disperser. I think Ronchi gratings want hessian and the
+            # holograms want disperser.
+            "False": "Do not rotate the image.",
+            "disperser": "Use the disperser angle geometry as specified in the disperser definition.",
+            "hessian": "Compute the angle from the image using a Hessian transform.",
+        }
+    )
+    doDeconvolveSpectrum = pexConfig.Field(
+        dtype=bool,
+        doc="Deconvolve the spectrogram with a simple 2D PSF analysis? "
+        "SPECTRACTOR_DECONVOLUTION_PSF2D internally.",
+        default=False,
+    )
+    doFullForwardModelDeconvolution = pexConfig.Field(
+        dtype=bool,
+        doc="Deconvolve the spectrogram with full forward model? "
+        "SPECTRACTOR_DECONVOLUTION_FFM internally.",
+        default=True,
+    )
+    deconvolutionSigmaClip = pexConfig.Field(
+        dtype=float,
+        doc="Sigma clipping level for the deconvolution when fitting the full forward model? "
+        "SPECTRACTOR_DECONVOLUTION_SIGMA_CLIP internally.",
+        default=100,
+    )
+    doSubtractBackground = pexConfig.Field(
+        dtype=bool,
+        doc="Subtract the background with Spectractor? "
+        "SPECTRACTOR_BACKGROUND_SUBTRACTION internally.",
+        default=True,
+    )
+    rebin = pexConfig.Field(
+        dtype=int,
+        doc="Rebinning factor to use on the input image, in pixels. "
+        "CCD_REBIN internally.",
+        default=2,  # TODO Change to 1 once speed issues are resolved
+    )
+    xWindow = pexConfig.Field(
+        dtype=int,
+        doc="Window x size to search for the target object. Ignored if targetCentroidMethod in ('exact, wcs')"
+        "XWINDOW internally.",
+        default=100,
+    )
+    yWindow = pexConfig.Field(
+        dtype=int,
+        doc="Window y size to search for the targeted object. Ignored if targetCentroidMethod in "
+        "('exact, wcs')"
+        "YWINDOW internally.",
+        default=100,
+    )
+    xWindowRotated = pexConfig.Field(
+        dtype=int,
+        doc="Window x size to search for the target object in the rotated image. "
+        "Ignored if rotationAngleMethod=False"
+        "XWINDOW_ROT internally.",
+        default=50,
+    )
+    yWindowRotated = pexConfig.Field(
+        dtype=int,
+        doc="Window y size to search for the target object in the rotated image. "
+        "Ignored if rotationAngleMethod=False"
+        "YWINDOW_ROT internally.",
+        default=50,
+    )
+    pixelShiftPrior = pexConfig.Field(
+        dtype=float,
+        doc="Prior on the reliability of the centroid estimate in pixels. "
+        "PIXSHIFT_PRIOR internally.",
+        default=5,
+        check=lambda x: x > 0,
+    )
+    doFilterRotatedImage = pexConfig.Field(
+        dtype=bool,
+        doc="Apply a filter to the rotated image? If not True, this creates residuals and correlated noise. "
+        "ROT_PREFILTER internally.",
+        default=True,
+    )
+    imageRotationSplineOrder = pexConfig.Field(
+        dtype=int,
+        doc="Order of the spline used when rotating the image. "
+        "ROT_ORDER internally.",
+        default=5,
+        # XXX min value of 3 for allowed range, max 5
+    )
+    rotationAngleMin = pexConfig.Field(
+        dtype=float,
+        doc="In the Hessian analysis to compute the rotation angle, cut all angles below this, in degrees. "
+        "ROT_ANGLE_MIN internally.",
+        default=-10,
+    )
+    rotationAngleMax = pexConfig.Field(
+        dtype=float,
+        doc="In the Hessian analysis to compute rotation angle, cut all angles above this, in degrees. "
+        "ROT_ANGLE_MAX internally.",
+        default=10,
+    )
+    plotLineWidth = pexConfig.Field(
+        dtype=float,
+        doc="Line width parameter for plotting. "
+        "LINEWIDTH internally.",
+        default=2,
+    )
+    verbose = pexConfig.Field(
+        dtype=bool,
+        doc="Set verbose mode? "
+        "VERBOSE internally.",
+        default=True,  # sets INFO level logging in Spectractor
+    )
+    spectractorDebugMode = pexConfig.Field(
+        dtype=bool,
+        doc="Set spectractor debug mode? "
+        "DEBUG internally.",
+        default=True,
+    )
+    spectractorDebugLogging = pexConfig.Field(
+        dtype=bool,
+        doc="Set spectractor debug logging? "
+        "DEBUG_LOGGING internally.",
+        default=False
+    )
+    doDisplay = pexConfig.Field(
+        dtype=bool,
+        doc="Display plots, for example when running in a notebook? "
+        "DISPLAY internally.",
+        default=True
+    )
+    lambdaMin = pexConfig.Field(
+        dtype=int,
+        doc="Minimum wavelength for spectral extraction (in nm). "
+        "LAMBDA_MIN internally.",
+        default=300
+    )
+    lambdaMax = pexConfig.Field(
+        dtype=int,
+        doc=" maximum wavelength for spectrum extraction (in nm). "
+        "LAMBDA_MAX internally.",
+        default=1100
+    )
+    lambdaStep = pexConfig.Field(
+        dtype=float,
+        doc="Step size for the wavelength array (in nm). "
+        "LAMBDA_STEP internally.",
+        default=1,
+    )
+    spectralOrder = pexConfig.ChoiceField(
+        dtype=int,
+        doc="The spectral order to extract. "
+        "SPEC_ORDER internally.",
+        default=1,
+        allowed={
+            1: "The first order spectrum in the positive y direction",
+            -1: "The first order spectrum in the negative y direction",
+            2: "The second order spectrum in the positive y direction",
+            -2: "The second order spectrum in the negative y direction",
+        }
+    )
+    signalWidth = pexConfig.Field(  # TODO: change this to be set wrt the focus/seeing, i.e. FWHM from imChar
+        dtype=int,
+        doc="Half transverse width of the signal rectangular window in pixels. "
+        "PIXWIDTH_SIGNAL internally.",
+        default=40,
+    )
+    backgroundDistance = pexConfig.Field(
+        dtype=int,
+        doc="Distance from dispersion axis to analyse the background in pixels. "
+        "PIXDIST_BACKGROUND internally.",
+        default=140,
+    )
+    backgroundWidth = pexConfig.Field(
+        dtype=int,
+        doc="Transverse width of the background rectangular window in pixels. "
+        "PIXWIDTH_BACKGROUND internally.",
+        default=40,
+    )
+    backgroundBoxSize = pexConfig.Field(
+        dtype=int,
+        doc="Box size for sextractor evaluation of the background. "
+        "PIXWIDTH_BOXSIZE internally.",
+        default=20,
+    )
+    backgroundOrder = pexConfig.Field(
+        dtype=int,
+        doc="The order of the polynomial background to fit in the transverse direction. "
+        "BGD_ORDER internally.",
+        default=1,
+    )
+    psfType = pexConfig.ChoiceField(
+        dtype=str,
+        doc="The PSF model type to use. "
+        "PSF_TYPE internally.",
+        default="Moffat",
+        allowed={
+            "Moffat": "A Moffat function",
+            "MoffatGauss": "A Moffat plus a Gaussian"
+        }
+    )
+    psfPolynomialOrder = pexConfig.Field(
+        dtype=int,
+        doc="The order of the polynomials to model wavelength dependence of the PSF shape parameters. "
+        "PSF_POLY_ORDER internally.",
+        default=2
+    )
+    psfRegularization = pexConfig.Field(
+        dtype=float,
+        doc="Regularisation parameter for the chisq minimisation to extract the spectrum. "
+        "PSF_FIT_REG_PARAM internally.",
+        default=1,
+        # XXX allowed range strictly positive
+    )
+    psfTransverseStepSize = pexConfig.Field(
+        dtype=int,
+        doc="Step size in pixels for the first transverse PSF1D fit. "
+        "PSF_PIXEL_STEP_TRANSVERSE_FIT internally.",
+        default=50,
+    )
+    psfFwhmClip = pexConfig.Field(
+        dtype=float,
+        doc="PSF is not evaluated outside a region larger than max(signalWidth, psfFwhmClip*fwhm) pixels. "
+        "PSF_FWHM_CLIP internally.",
+        default=2,
+    )
+    calibBackgroundOrder = pexConfig.Field(
+        dtype=int,
+        doc="Order of the background polynomial to fit. "
+        "CALIB_BGD_ORDER internally.",
+        default=3,
+    )
+    calibPeakWidth = pexConfig.Field(
+        dtype=int,
+        doc="Half-range to look for local extrema in pixels around tabulated line values. "
+        "CALIB_PEAK_WIDTH internally.",
+        default=7
+    )
+    calibBackgroundWidth = pexConfig.Field(
+        dtype=int,
+        doc="Size of the peak sides to use to fit spectrum base line. "
+        "CALIB_BGD_WIDTH internally.",
+        default=15,
+    )
+    calibSavgolWindow = pexConfig.Field(
+        dtype=int,
+        doc="Window size for the savgol filter in pixels. "
+        "CALIB_SAVGOL_WINDOW internally.",
+        default=5,
+    )
+    calibSavgolOrder = pexConfig.Field(
+        dtype=int,
+        doc="Polynomial order for the savgol filter. "
+        "CALIB_SAVGOL_ORDER internally.",
+        default=2,
+    )
+    offsetFromMainStar = pexConfig.Field(
+        dtype=int,
+        doc="Number of pixels from the main star's centroid to start extraction",
+        default=100
+    )
+    spectrumLengthPixels = pexConfig.Field(
+        dtype=int,
+        doc="Length of the spectrum in pixels",
+        default=5000
+    )
+    # ProcessStar own parameters
     isr = pexConfig.ConfigurableField(
         target=IsrTask,
         doc="Task to perform instrumental signature removal",
@@ -120,89 +395,6 @@ class ProcessStarTaskConfig(pipeBase.PipelineTaskConfig,
         dtype=bool,
         doc="Write out the results?",
         default=True,
-    )
-    mainSourceFindingMethod = pexConfig.ChoiceField(
-        doc="Which attribute to prioritize when selecting the main source object",
-        dtype=str,
-        default="BRIGHTEST",
-        allowed={
-            "BRIGHTEST": "Select the brightest object with roundness > roundnessCut",
-            "ROUNDEST": "Select the roundest object with brightness > fluxCut",
-        }
-    )
-    mainStarRoundnessCut = pexConfig.Field(
-        dtype=float,
-        doc="Value of ellipticity above which to reject the brightest object."
-        " Ignored if mainSourceFindingMethod == BRIGHTEST",
-        default=0.2
-    )
-    mainStarFluxCut = pexConfig.Field(
-        dtype=float,
-        doc="Object flux below which to reject the roundest object."
-        " Ignored if mainSourceFindingMethod == ROUNDEST",
-        default=1e7
-    )
-    mainStarNpixMin = pexConfig.Field(
-        dtype=int,
-        doc="Minimum number of pixels for object detection of main star",
-        default=10
-    )
-    mainStarNsigma = pexConfig.Field(
-        dtype=int,
-        doc="nSigma for detection of main star",
-        default=200  # the m=0 is very bright indeed, and we don't want to detect much spectrum
-    )
-    mainStarGrow = pexConfig.Field(
-        dtype=int,
-        doc="Number of pixels to grow by when detecting main star. This"
-        " encourages the spectrum to merge into one footprint, but too much"
-        " makes everything round, compromising mainStarRoundnessCut's"
-        " effectiveness",
-        default=5
-    )
-    mainStarGrowIsotropic = pexConfig.Field(
-        dtype=bool,
-        doc="Grow main star's footprint isotropically?",
-        default=False
-    )
-    aperture = pexConfig.Field(
-        dtype=int,
-        doc="Width of the aperture to use in pixels",
-        default=250
-    )
-    spectrumLengthPixels = pexConfig.Field(
-        dtype=int,
-        doc="Length of the spectrum in pixels",
-        default=5000
-    )
-    offsetFromMainStar = pexConfig.Field(
-        dtype=int,
-        doc="Number of pixels from the main star's centroid to start extraction",
-        default=100
-    )
-    dispersionDirection = pexConfig.ChoiceField(
-        doc="Direction along which the image is dispersed",
-        dtype=str,
-        default="y",
-        allowed={
-            "x": "Dispersion along the serial direction",
-            "y": "Dispersion along the parallel direction",
-        }
-    )
-    spectralOrder = pexConfig.ChoiceField(
-        doc="Direction along which the image is dispersed",
-        dtype=str,
-        default="+1",
-        allowed={
-            "+1": "Use the m+1 spectrum",
-            "-1": "Use the m-1 spectrum",
-            "both": "Use both spectra",
-        }
-    )
-    binning = pexConfig.Field(
-        dtype=int,
-        doc="Bin the input image by this factor",
-        default=4
     )
     doFlat = pexConfig.Field(
         dtype=bool,
@@ -222,16 +414,6 @@ class ProcessStarTaskConfig(pipeBase.PipelineTaskConfig,
     doSavePlots = pexConfig.Field(
         dtype=bool,
         doc="Save matplotlib plots to output rerun?",
-        default=False
-    )
-    spectractorDebugMode = pexConfig.Field(
-        dtype=bool,
-        doc="Set debug mode for Spectractor",
-        default=True
-    )
-    spectractorDebugLogging = pexConfig.Field(  # TODO: tie this to the task debug level?
-        dtype=bool,
-        doc="Set debug logging for Spectractor",
         default=False
     )
     forceObjectName = pexConfig.Field(
@@ -452,6 +634,20 @@ class ProcessStarTask(pipeBase.PipelineTask):
         return source.getCentroid()
 
     def updateMetadata(self, exp, **kwargs):
+        """Update an exposure's metadata with set items from the visit info.
+
+        Spectractor expects many items, like the hour angle and airmass, to be
+        in the metadata, so pull them out of the visit info etc and put them
+        into the main metadata. Also updates the metadata with any supplied
+        kwargs.
+
+        Parameters
+        ----------
+        exp : `lsst.afw.image.Exposure`
+            The exposure to update.
+        **kwargs : `dict`
+            The items to add.
+        """
         md = exp.getMetadata()
         vi = exp.getInfo().getVisitInfo()
 
@@ -485,18 +681,113 @@ class ProcessStarTask(pipeBase.PipelineTask):
         outputs = self.run(**inputs)
         butlerQC.put(outputs, outputRefs)
 
+    def getNormalizedTargetName(self, target):
+        """Normalize the name of the target.
+
+        All targets which start with 'spec:' are converted to the name of the
+        star without the leading 'spec:'. Any objects with mappings defined in
+        data/nameMappings.txt are converted to the mapped name.
+
+        Parameters
+        ----------
+        target : `str`
+            The name of the target.
+
+        Returns
+        -------
+        normalizedTarget : `str`
+            The normalized name of the target.
+        """
+        target = target.replace('spec:', '')
+
+        nameMappingsFile = os.path.join(getPackageDir('atmospec'), 'data', 'nameMappings.txt')
+        names, mappedNames = np.loadtxt(nameMappingsFile, dtype=str, unpack=True)
+        assert len(names) == len(mappedNames)
+        conversions = {name: mapped for name, mapped in zip(names, mappedNames)}
+
+        if target in conversions.keys():
+            converted = conversions[target]
+            self.log.info(f"Converted target name {target} to {converted}")
+            return converted
+        return target
+
     def run(self, *, inputExp, inputCentroid, dataIdDict):
+        if not isDispersedExp(inputExp):
+            raise RuntimeError(f"Exposure is not a dispersed image {dataIdDict}")
         starNames = self.loadStarNames()
 
-        overrideDict = {'SAVE': False,
-                        'OBS_NAME': 'AUXTEL',
-                        'DEBUG': self.config.spectractorDebugMode,
-                        'DEBUG_LOGGING': self.config.spectractorDebugLogging,
-                        'DISPLAY': self.config.doDisplayPlots,
-                        'CCD_REBIN': self.config.binning,
-                        'VERBOSE': 0,
-                        # 'CCD_IMSIZE': 4000}
-                        }
+        overrideDict = {
+            # normal config parameters
+            'SPECTRACTOR_FIT_TARGET_CENTROID': ('guess' if self.config.targetCentroidMethod == 'exact'
+                                                else self.config.targetCentroidMethod),
+            'SPECTRACTOR_COMPUTE_ROTATION_ANGLE': self.config.rotationAngleMethod,
+            'SPECTRACTOR_DECONVOLUTION_PSF2D': self.config.doDeconvolveSpectrum,
+            'SPECTRACTOR_DECONVOLUTION_FFM': self.config.doFullForwardModelDeconvolution,
+            'SPECTRACTOR_DECONVOLUTION_SIGMA_CLIP': self.config.deconvolutionSigmaClip,
+            'SPECTRACTOR_BACKGROUND_SUBTRACTION': self.config.doSubtractBackground,
+            'CCD_REBIN': self.config.rebin,
+            'XWINDOW': self.config.xWindow,
+            'YWINDOW': self.config.yWindow,
+            'XWINDOW_ROT': self.config.xWindowRotated,
+            'YWINDOW_ROT': self.config.yWindowRotated,
+            'PIXSHIFT_PRIOR': self.config.pixelShiftPrior,
+            'ROT_PREFILTER': self.config.doFilterRotatedImage,
+            'ROT_ORDER': self.config.imageRotationSplineOrder,
+            'ROT_ANGLE_MIN': self.config.rotationAngleMin,
+            'ROT_ANGLE_MAX': self.config.rotationAngleMax,
+            'LINEWIDTH': self.config.plotLineWidth,
+            'VERBOSE': self.config.verbose,
+            'DEBUG': self.config.spectractorDebugMode,
+            'DEBUG_LOGGING': self.config.spectractorDebugLogging,
+            'DISPLAY': self.config.doDisplay,
+            'LAMBDA_MIN': self.config.lambdaMin,
+            'LAMBDA_MAX': self.config.lambdaMax,
+            'LAMBDA_STEP': self.config.lambdaStep,
+            'SPEC_ORDER': self.config.spectralOrder,
+            'PIXWIDTH_SIGNAL': self.config.signalWidth,
+            'PIXDIST_BACKGROUND': self.config.backgroundDistance,
+            'PIXWIDTH_BACKGROUND': self.config.backgroundWidth,
+            'PIXWIDTH_BOXSIZE': self.config.backgroundBoxSize,
+            'BGD_ORDER': self.config.backgroundOrder,
+            'PSF_TYPE': self.config.psfType,
+            'PSF_POLY_ORDER': self.config.psfPolynomialOrder,
+            'PSF_FIT_REG_PARAM': self.config.psfRegularization,
+            'PSF_PIXEL_STEP_TRANSVERSE_FIT': self.config.psfTransverseStepSize,
+            'PSF_FWHM_CLIP': self.config.psfFwhmClip,
+            'CALIB_BGD_ORDER': self.config.calibBackgroundOrder,
+            'CALIB_PEAK_WIDTH': self.config.calibPeakWidth,
+            'CALIB_BGD_WIDTH': self.config.calibBackgroundWidth,
+            'CALIB_SAVGOL_WINDOW': self.config.calibSavgolWindow,
+            'CALIB_SAVGOL_ORDER': self.config.calibSavgolOrder,
+
+            # Hard-coded parameters
+            'OBS_NAME': 'AUXTEL',
+            'CCD_IMSIZE': 4000,  # short axis - we trim the CCD to square
+            'CCD_MAXADU': 170000,  # XXX need to set this from camera value
+            'CCD_GAIN': 1.1,  # set programatically later, this is default nominal value
+            'OBS_NAME': 'AUXTEL',
+            'OBS_ALTITUDE': 2.66299616375123,  # XXX get this from / check with utils value
+            'OBS_LATITUDE': -30.2446389756252,  # XXX get this from / check with utils value
+            'OBS_DIAMETER': 1.20,
+            'OBS_EPOCH': "J2000.0",
+            'OBS_CAMERA_DEC_FLIP_SIGN': 1,
+            'OBS_CAMERA_RA_FLIP_SIGN': 1,
+            'OBS_SURFACE': np.pi * 1.2 ** 2 / 4.,
+            'PAPER': False,
+            'SAVE': False,
+            'DISTANCE2CCD_ERR': 0.4,
+
+            # Parameters set programatically
+            'LAMBDAS': np.arange(self.config.lambdaMin,
+                                 self.config.lambdaMax,
+                                 self.config.lambdaStep),
+            'CALIB_BGD_NPARAMS': self.config.calibBackgroundOrder + 1,
+
+            # Parameters set elsewhere
+            # OBS_CAMERA_ROTATION
+            # DISTANCE2CCD
+        }
+
         supplementDict = {'CALLING_CODE': 'LSST_DM',
                           'STAR_NAMES': starNames}
 
@@ -507,9 +798,16 @@ class ProcessStarTask(pipeBase.PipelineTask):
         # TODO: think if this is the right place for this
         # probably wants to go in spectraction.py really
         linearStagePosition = getLinearStagePosition(inputExp)
+        _, grating = getFilterAndDisperserFromExp(inputExp)
+        if grating == 'holo_003':
+            # the hologram is sealed with a 4 mm window and this is how
+            # spectractor handles this, so while it's quite ugly, do this to
+            # keep the behaviour the same for now.
+            linearStagePosition += 4  # hologram is sealed with a 4 mm window
         overrideDict['DISTANCE2CCD'] = linearStagePosition
 
-        target = inputExp.getMetadata()['OBJECT']
+        target = inputExp.visitInfo.object
+        target = self.getNormalizedTargetName(target)
         if self.config.forceObjectName:
             self.log.info(f"Forcing target name from {target} to {self.config.forceObjectName}")
             target = self.config.forceObjectName
@@ -534,24 +832,9 @@ class ProcessStarTask(pipeBase.PipelineTask):
 
         self.log.info("Finished processing %s" % (dataIdDict))
 
-        self.makeResultPickleable(spectraction)
-
         return pipeBase.Struct(spectractorSpectrum=spectraction.spectrum,
                                spectractorImage=spectraction.image,
                                spectraction=spectraction)
-
-    def makeResultPickleable(self, result):
-        """Remove unpicklable components from the output"""
-        result.image.target.build_sed = None
-        result.spectrum.target.build_sed = None
-        result.image.target.sed = None
-        result.spectrum.disperser.load_files = None
-        result.image.disperser.load_files = None
-
-        result.spectrum.disperser.N_fit = None
-        result.spectrum.disperser.N_interp = None
-        result.spectrum.disperser.ratio_order_2over1 = None
-        result.spectrum.disperser.theta = None
 
     def runAstrometry(self, butler, exp, icSrc):
         refObjLoaderConfig = ReferenceObjectLoader.ConfigClass()
@@ -599,6 +882,20 @@ class ProcessStarTask(pipeBase.PipelineTask):
         return
 
     def loadStarNames(self):
+        """Get the objects which should be treated as stars which do not begin
+        with HD.
+
+        Spectractor treats all objects which start HD as stars, and all which
+        don't as calibration objects, e.g. arc lamps or planetary nebulae.
+        Adding items to data/starNames.txt will cause them to be treated as
+        regular stars.
+
+        Returns
+        -------
+        starNames : `list` of `str`
+            The list of all objects to be treated as stars despite not starting
+            with HD.
+        """
         starNameFile = os.path.join(getPackageDir('atmospec'), 'data', 'starNames.txt')
         with open(starNameFile, 'r') as f:
             lines = f.readlines()
@@ -658,9 +955,3 @@ class ProcessStarTask(pipeBase.PipelineTask):
 
         bbox = geom.Box2I(geom.Point2I(xStart, yStart), geom.Point2I(xEnd, yEnd))
         return bbox
-
-        # def calcRidgeLine(self, footprint):
-        #     ridgeLine = np.zeros(self.footprint.length)
-        #     for
-
-        #     return ridgeLine

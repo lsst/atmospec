@@ -12,7 +12,7 @@ tasks:
       doDefect: True
       doLinearize: False
       doCrosstalk: False
-      doSaturationInterpolation: False
+      doSaturationInterpolation: True
       overscan.fitType: 'MEDIAN_PER_ROW'
       doBias: True
   characterizeImage:
@@ -23,5 +23,5 @@ tasks:
       doMeasurePsf: False
       detection.includeThresholdMultiplier: 3
       # assess carefully whether turning on cosmic ray repair hurts performance
-  singleStarCentroidTask: lsst.atmospec.centroiding.SingleStarCentroidTask
-  processStarTask: lsst.atmospec.processStar.ProcessStarTask
+  singleStarCentroid: lsst.atmospec.centroiding.SingleStarCentroidTask
+  processStar: lsst.atmospec.processStar.ProcessStarTask

@@ -24,6 +24,7 @@ __all__ = [
     "gainFromFlatPair",
     "getAmpReadNoiseFromRawExp",
     "getLinearStagePosition",
+    "getFilterAndDisperserFromExp",
     "getSamplePoints",
     "getTargetCentroidFromWcs",
     "isDispersedDataId",
@@ -37,13 +38,16 @@ __all__ = [
 
 import logging
 import numpy as np
+import sys
 import lsst.afw.math as afwMath
 import lsst.afw.image as afwImage
+from lsst.ctrl.mpexec import SimplePipelineExecutor
 import lsst.afw.geom as afwGeom
 import lsst.geom as geom
 import lsst.daf.butler as dafButler
 from astro_metadata_translator import ObservationInfo
-# from lsst.afw.cameraGeom import PIXELS, FOCAL_PLANE  XXX remove if unneeded
+import lsst.pex.config as pexConfig
+from lsst.pipe.base import Pipeline
 from lsst.obs.lsst.translators.lsst import FILTER_DELIMITER
 
 import astropy
@@ -398,7 +402,7 @@ def simbadLocationForTarget(target):
 
     obj = Simbad.query_object(target)
     if not obj:
-        raise ValueError(f"Found failed to find {target} in simbad!")
+        raise ValueError(f"Failed to find {target} in simbad!")
     if len(obj) != 1:
         raise ValueError(f"Found {len(obj)} simbad entries for {target}!")
 
@@ -465,8 +469,19 @@ def vizierLocationForTarget(exp, target, doMotionCorrection):
 
 
 def isDispersedExp(exp):
-    """Check if an exposure is dispersed."""
-    filterFullName = exp.getFilter().physicalLabel
+    """Check if an exposure is dispersed.
+
+    Parameters
+    ----------
+    exp : `lsst.afw.image.Exposure`
+        The exposure.
+
+    Returns
+    -------
+    isDispersed : `bool`
+        Whether it is a dispersed image or not.
+    """
+    filterFullName = exp.filter.physicalLabel
     if FILTER_DELIMITER not in filterFullName:
         raise RuntimeError(f"Error parsing filter name {filterFullName}")
     filt, grating = filterFullName.split(FILTER_DELIMITER)
@@ -476,8 +491,22 @@ def isDispersedExp(exp):
 
 
 def isDispersedDataId(dataId, butler):
-    """Check if a dataId corresponds to a dispersed image."""
+    """Check if a dataId corresponds to a dispersed image.
+
+    Parameters
+    ----------
+    dataId : `dict`
+        The dataId.
+    butler : `lsst.daf.butler.Butler`
+        The butler.
+
+    Returns
+    -------
+    isDispersed : `bool`
+        Whether it is a dispersed image or not.
+    """
     if isinstance(butler, dafButler.Butler):
+        # TODO: DM-38265 Need to make this work with DataCoords
         assert 'day_obs' in dataId or 'exposure.day_obs' in dataId, f'failed to find day_obs in {dataId}'
         assert 'seq_num' in dataId or 'exposure.seq_num' in dataId, f'failed to find seq_num in {dataId}'
         seq_num = dataId['seq_num'] if 'seq_num' in dataId else dataId['exposure.seq_num']
@@ -500,6 +529,18 @@ def isDispersedDataId(dataId, butler):
 
 
 def getLinearStagePosition(exp):
+    """Get the linear stage position.
+
+    Parameters
+    ----------
+    exp : `lsst.afw.image.Exposure`
+        The exposure.
+
+    Returns
+    -------
+    position : `float`
+        The position of the linear stage, in mm.
+    """
     md = exp.getMetadata()
     linearStagePosition = 115  # this seems to be the rough zero-point for some reason
     if 'LINSPOS' in md:
@@ -507,3 +548,117 @@ def getLinearStagePosition(exp):
         if position is not None:
             linearStagePosition += position
     return linearStagePosition
+
+
+def getFilterAndDisperserFromExp(exp):
+    """Get the filter and disperser from an exposure.
+
+    Parameters
+    ----------
+    exp : `lsst.afw.image.Exposure`
+        The exposure.
+
+    Returns
+    -------
+    filter, disperser : `tuple` of `str`
+        The filter and the disperser names, as strings.
+    """
+    filterFullName = exp.getFilter().physicalLabel
+    if FILTER_DELIMITER not in filterFullName:
+        filt = filterFullName
+        grating = exp.getInfo().getMetadata()['GRATING']
+    else:
+        filt, grating = filterFullName.split(FILTER_DELIMITER)
+    return filt, grating
+
+
+def runNotebook(dataId, outputCollection, taskConfigs={}, configOptions={}, embargo=False):
+    """Run the ProcessStar pipeline for a single dataId, writing to the
+    specified output collection.
+
+    This is a convenience function to allow running single dataIds in notebooks
+    so that plots can be inspected easily. This is not designed for bulk data
+    reductions.
+
+    Parameters
+    ----------
+    dataId : `dict`
+        The dataId to run.
+    outputCollection : `str`, optional
+        Output collection name.
+    taskConfigs : `dict` [`lsst.pipe.base.PipelineTaskConfig`], optional
+        Dictionary of config config classes. The key of the ``taskConfigs``
+        dict is the relevant task label. The value of ``taskConfigs``
+        is a task config object to apply. See notes for ignored items.
+    configOptions : `dict` [`dict`], optional
+        Dictionary of individual config options. The key of the
+        ``configOptions`` dict is the relevant task label. The value
+        of ``configOptions`` is another dict that contains config
+        key/value overrides to apply.
+    embargo : `bool`, optional
+        Use the embargo repo?
+
+    Returns
+    -------
+    spectraction : `lsst.atmospec.spectraction.Spectraction`
+        The extracted spectraction object.
+
+    Notes
+    -----
+    Any ConfigurableInstances in supplied task config overrides will be
+    ignored. Currently (see DM-XXXXX) this causes a RecursionError.
+    """
+    def makeQuery(dataId):
+        dayObs = dataId['day_obs'] if 'day_obs' in dataId else dataId['exposure.day_obs']
+        seqNum = dataId['seq_num'] if 'seq_num' in dataId else dataId['exposure.seq_num']
+        queryString = (f"exposure.day_obs={dayObs} AND "
+                       f"exposure.seq_num={seqNum} AND "
+                       "instrument='LATISS'")
+
+        return queryString
+    repo = "LATISS" if not embargo else "/repo/embargo"
+
+    # TODO: use LATISS_DEFAULT_COLLECTIONS here?
+    butler = SimplePipelineExecutor.prep_butler(repo,
+                                                inputs=['LATISS/raw/all',
+                                                        'refcats',
+                                                        'LATISS/calib',
+                                                        ],
+                                                output=outputCollection)
+
+    pipeline = Pipeline.fromFile("${ATMOSPEC_DIR}/pipelines/processStar.yaml")
+
+    for taskName, configClass in taskConfigs.items():
+        for option, value in configClass.items():
+            # connections require special treatment
+            if isinstance(value, configClass.ConnectionsConfigClass):
+                for connectionOption, connectionValue in value.items():
+                    pipeline.addConfigOverride(taskName,
+                                               f'{option}.{connectionOption}',
+                                               connectionValue)
+            # ConfigurableInstance has to be done with .retarget()
+            elif not isinstance(value, pexConfig.ConfigurableInstance):
+                pipeline.addConfigOverride(taskName, option, value)
+
+    for taskName, configDict in configOptions.items():
+        for option, value in configDict.items():
+            # ConfigurableInstance has to be done with .retarget()
+            if not isinstance(value, pexConfig.ConfigurableInstance):
+                pipeline.addConfigOverride(taskName, option, value)
+
+    query = makeQuery(dataId)
+    executor = SimplePipelineExecutor.from_pipeline(pipeline,
+                                                    where=query,
+                                                    root=repo,
+                                                    butler=butler)
+
+    logging.basicConfig(level=logging.INFO, stream=sys.stdout)
+    quanta = executor.run()
+
+    # quanta is just a plain list, but the items know their names, so rather
+    # than just taking the third item and relying on that being the position in
+    # the pipeline we get the item by name
+    processStarQuantum = [q for q in quanta if q.taskName == 'lsst.atmospec.processStar.ProcessStarTask'][0]
+    dataRef = processStarQuantum.outputs['spectractorSpectrum'][0]
+    result = butler.get(dataRef)
+    return result
