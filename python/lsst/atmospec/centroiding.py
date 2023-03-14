@@ -22,7 +22,7 @@
 import lsst.afw.image as afwImage
 import lsst.pipe.base as pipeBase
 
-from lsst.meas.algorithms import LoadIndexedReferenceObjectsTask, MagnitudeLimit, ReferenceObjectLoader
+from lsst.meas.algorithms import LoadReferenceObjectsTask, MagnitudeLimit, ReferenceObjectLoader
 from lsst.meas.astrom import AstrometryTask, FitAffineWcsTask
 from lsst.pipe.tasks.quickFrameMeasurement import (QuickFrameMeasurementTask)
 from lsst.pipe.base.task import TaskError
@@ -70,7 +70,7 @@ class SingleStarCentroidTaskConfig(pipeBase.PipelineTaskConfig,
                                    pipelineConnections=SingleStarCentroidTaskConnections):
     """Configuration parameters for ProcessStarTask."""
     astromRefObjLoader = pexConfig.ConfigurableField(
-        target=LoadIndexedReferenceObjectsTask,
+        target=LoadReferenceObjectsTask,
         doc="Reference object loader for astrometric calibration",
     )
     astrometry = pexConfig.ConfigurableField(
