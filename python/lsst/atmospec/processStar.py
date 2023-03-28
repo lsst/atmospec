@@ -799,7 +799,7 @@ class ProcessStarTask(pipeBase.PipelineTask):
         # probably wants to go in spectraction.py really
         linearStagePosition = getLinearStagePosition(inputExp)
         _, grating = getFilterAndDisperserFromExp(inputExp)
-        if grating == 'holo_003':
+        if grating == 'holo4_003':
             # the hologram is sealed with a 4 mm window and this is how
             # spectractor handles this, so while it's quite ugly, do this to
             # keep the behaviour the same for now.
