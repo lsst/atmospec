@@ -34,6 +34,7 @@ __all__ = [
     "rotateExposure",
     "simbadLocationForTarget",
     "vizierLocationForTarget",
+    "runNotebook",
 ]
 
 import logging
