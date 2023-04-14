@@ -20,7 +20,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import pkgutil
-import lsstimport
+
 from .processStar import *
 from .dispersion import *
 from .centroiding import *
