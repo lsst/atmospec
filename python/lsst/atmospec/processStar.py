@@ -101,9 +101,15 @@ class ProcessStarTaskConfig(pipeBase.PipelineTaskConfig,
         dtype=str,
         doc="Method to get target centroid. "
         "SPECTRACTOR_FIT_TARGET_CENTROID internally.",
-        default="fit",
+        default="auto",
         allowed={
-            # TODO: probably want an "auto" mode
+            # note that although this config option controls
+            # SPECTRACTOR_FIT_TARGET_CENTROID, it doesn't map there directly,
+            # because Spectractor only has the concepts of guess, fit and wcs,
+            # and it calls "exact" "guess" internally, so that's remapped.
+            "auto": "If the upstream astrometric fit succeeded, and therefore"
+            " the centroid is an exact one, use that as an ``exact`` value,"
+            " otherwise tell Spectractor to ``fit`` the centroid",
             "exact": "Use a given input value as source of truth.",
             "fit": "Fit a 2d Moffat model to the target.",
             "WCS": "Use the target's catalog location and the image's wcs.",
@@ -711,6 +717,38 @@ class ProcessStarTask(pipeBase.PipelineTask):
             return converted
         return target
 
+    def _getSpectractorTargetSetting(self, inputCentroid):
+        """Calculate the value to set SPECTRACTOR_FIT_TARGET_CENTROID to.
+
+        Parameters
+        ----------
+        inputCentroid : `???`
+            The input centroid to the task.
+
+        Returns
+        -------
+        centroidMethod : `str`
+            The value to set SPECTRACTOR_FIT_TARGET_CENTROID to.
+        """
+
+        # if mode is auto and the astrometry worked then it's an exact
+        # centroid, and otherwise we fit, as per docs on this option.
+        if self.config.targetCentroidMethod == 'auto':
+            if inputCentroid['astrometricMatch'] is True:
+                self.log.info("Auto centroid is using exact centroid for target from the astrometry")
+                return 'guess'  # this means exact
+            else:
+                self.log.info("Auto centroid is using FIT in Spectractor to get the target centroid")
+                return 'fit'  # this means exact
+
+        # this is just renaming the config parameter because guess sounds like
+        # an instruction, and really we're saying to take this as given.
+        if self.config.targetCentroidMethod == 'exact':
+            return 'guess'
+
+        # all other options fall through
+        return self.config.targetCentroidMethod
+
     def run(self, *, inputExp, inputCentroid, dataIdDict):
         if not isDispersedExp(inputExp):
             raise RuntimeError(f"Exposure is not a dispersed image {dataIdDict}")
@@ -718,8 +756,7 @@ class ProcessStarTask(pipeBase.PipelineTask):
 
         overrideDict = {
             # normal config parameters
-            'SPECTRACTOR_FIT_TARGET_CENTROID': ('guess' if self.config.targetCentroidMethod == 'exact'
-                                                else self.config.targetCentroidMethod),
+            'SPECTRACTOR_FIT_TARGET_CENTROID': self._getSpectractorTargetSetting(inputCentroid),
             'SPECTRACTOR_COMPUTE_ROTATION_ANGLE': self.config.rotationAngleMethod,
             'SPECTRACTOR_DECONVOLUTION_PSF2D': self.config.doDeconvolveSpectrum,
             'SPECTRACTOR_DECONVOLUTION_FFM': self.config.doFullForwardModelDeconvolution,
