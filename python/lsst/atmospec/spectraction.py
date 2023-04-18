@@ -183,14 +183,6 @@ class SpectractorShim:
         image : `spectractor.extractor.images.Image`
             The image.
         """
-        # TODO: passing exact centroids seems to be causing a serious
-        # and non-obvious problem!
-        # this needs fixing for several reasons, mostly because if we have a
-        # known good centroid then we want to skip the refitting entirely
-        xpos = int(np.round(xpos))
-        ypos = int(np.round(ypos))
-        self.log.debug(f'DM value at centroid: {exp.image.array[ypos, xpos]}\n')
-
         # make a blank image, with the filter/disperser set
         image = Image(file_name='', target_label=target_label, disperser_label=disperser_label,
                       filter_label=filter_label)
@@ -377,14 +369,6 @@ class SpectractorShim:
             self._makePath(outputRoot, plotting=plotting)  # early in case this fails, as processing is slow
 
         # Upstream loads config file here
-
-        # TODO: DM-38264:
-        # passing exact centroids seems to be causing a serious
-        # and non-obvious problem! this needs fixing for several reasons,
-        # mostly because if we have a known good centroid then we want to skip
-        # the refitting entirely
-        xpos = int(np.round(xpos))
-        ypos = int(np.round(ypos))
 
         filter_label, disperser = getFilterAndDisperserFromExp(exp)
         image = self.spectractorImageFromLsstExposure(exp, xpos, ypos, target_label=target,
