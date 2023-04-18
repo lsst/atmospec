@@ -722,8 +722,8 @@ class ProcessStarTask(pipeBase.PipelineTask):
 
         Parameters
         ----------
-        inputCentroid : `???`
-            The input centroid to the task.
+        inputCentroid : `dict`
+            The `atmospecCentroid` dict, as received in the task input data.
 
         Returns
         -------
