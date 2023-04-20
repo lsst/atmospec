@@ -358,6 +358,10 @@ class SpectractorShim:
 
         airmass = vi.getBoresightAirmass()
         spectrum.adr_params = [dec, hourAngle, temperature, pressure, humidity, airmass]
+        spectrum.pressure = pressure
+        spectrum.humidity = humidity
+        spectrum.airmass = airmass
+        spectrum.temperature = temperature
 
     def run(self, exp, xpos, ypos, target, outputRoot=None, plotting=True):
         # run option kwargs in the original code, seems to ~always be True

@@ -84,6 +84,12 @@ class ProcessStarTaskConnections(pipeBase.PipelineTaskConnections,
         storageClass="SpectractorSpectrum",
         dimensions=("instrument", "visit", "detector"),
     )
+    spectractorFitParameters = cT.Output(
+        name="spectractorFitParameters",
+        doc="The fitted Spectractor atmospheric parameters.",
+        storageClass="SpectractorFitParameters",
+        dimensions=("instrument", "visit", "detector"),
+    )
     spectractorImage = cT.Output(
         name="spectractorImage",
         doc="The Spectractor output image.",
@@ -93,6 +99,8 @@ class ProcessStarTaskConnections(pipeBase.PipelineTaskConnections,
 
     def __init__(self, *, config=None):
         super().__init__(config=config)
+        if not config.doFitAtmosphere:
+            self.outputs.remove("spectractorFitParameters")
 
 
 class ProcessStarTaskConfig(pipeBase.PipelineTaskConfig,
@@ -881,10 +889,17 @@ class ProcessStarTask(pipeBase.PipelineTask):
 
         spectraction = spectractor.run(inputExp, *centroid, target)
 
+        w = None
+        if self.config.doFitAtmosphere:
+            from spectractor.fit.fit_spectrum import SpectrumFitWorkspace, run_spectrum_minimisation
+            w = SpectrumFitWorkspace(spectraction.spectrum, fit_angstrom_exponent=True, verbose=True, plot=True)
+            run_spectrum_minimisation(w, method="newton")
+
         self.log.info("Finished processing %s" % (dataIdDict))
 
         return pipeBase.Struct(spectractorSpectrum=spectraction.spectrum,
                                spectractorImage=spectraction.image,
+                               spectractorFitParameters=w.params if w is not None else None,
                                spectraction=spectraction)
 
     def runAstrometry(self, butler, exp, icSrc):
