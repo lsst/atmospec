@@ -892,7 +892,10 @@ class ProcessStarTask(pipeBase.PipelineTask):
         w = None
         if self.config.doFitAtmosphere:
             from spectractor.fit.fit_spectrum import SpectrumFitWorkspace, run_spectrum_minimisation
-            w = SpectrumFitWorkspace(spectraction.spectrum, fit_angstrom_exponent=True, verbose=True, plot=True)
+            w = SpectrumFitWorkspace(spectraction.spectrum,
+                                     fit_angstrom_exponent=True,
+                                     verbose=True,
+                                     plot=True)
             run_spectrum_minimisation(w, method="newton")
 
         self.log.info("Finished processing %s" % (dataIdDict))
