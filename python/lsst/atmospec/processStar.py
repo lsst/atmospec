@@ -84,23 +84,41 @@ class ProcessStarTaskConnections(pipeBase.PipelineTaskConnections,
         storageClass="SpectractorSpectrum",
         dimensions=("instrument", "visit", "detector"),
     )
-    spectractorFitParameters = cT.Output(
-        name="spectractorFitParameters",
-        doc="The fitted Spectractor atmospheric parameters.",
-        storageClass="SpectractorFitParameters",
-        dimensions=("instrument", "visit", "detector"),
-    )
     spectractorImage = cT.Output(
         name="spectractorImage",
         doc="The Spectractor output image.",
         storageClass="SpectractorImage",
         dimensions=("instrument", "visit", "detector"),
     )
+    spectrumForwardModelFitParameters = cT.Output(
+        name="spectrumForwardModelFitParameters",
+        doc="The full forward model fit parameters.",
+        storageClass="SpectractorFitParameters",
+        dimensions=("instrument", "visit", "detector"),
+    )
+    spectrumLibradtranFitParameters = cT.Output(
+        name="spectrumLibradtranFitParameters",
+        doc="The fitted Spectractor atmospheric parameters from fitting the atmosphere with libradtran"
+            " on the spectrum.",
+        storageClass="SpectractorFitParameters",
+        dimensions=("instrument", "visit", "detector"),
+    )
+    spectrogramLibradtranFitParameters = cT.Output(
+        name="spectrogramLibradtranFitParameters",
+        doc="The fitted Spectractor atmospheric parameters from fitting the atmosphere with libradtran"
+            " directly on the spectrogram.",
+        storageClass="SpectractorFitParameters",
+        dimensions=("instrument", "visit", "detector"),
+    )
 
     def __init__(self, *, config=None):
         super().__init__(config=config)
+        if not config.doFullForwardModelDeconvolution:
+            self.outputs.remove("spectrumForwardModelFitParameters")
         if not config.doFitAtmosphere:
-            self.outputs.remove("spectractorFitParameters")
+            self.outputs.remove("spectrumLibradtranFitParameters")
+        if not config.doFitAtmosphereOnSpectrogram:
+            self.outputs.remove("spectrogramLibradtranFitParameters")
 
 
 class ProcessStarTaskConfig(pipeBase.PipelineTaskConfig,
@@ -444,9 +462,21 @@ class ProcessStarTaskConfig(pipeBase.PipelineTaskConfig,
         doc="Which filter in the reference catalog to match to?",
         default="phot_g_mean"
     )
+    # This is a post-processing function in Spectractor and therefore isn't
+    # controlled by its top-level function, and thus doesn't map to a
+    # spectractor.parameters ALL_CAPS config option
     doFitAtmosphere = pexConfig.Field(
         dtype=bool,
         doc="Use uvspec to fit the atmosphere? Requires the binary to be available.",
+        default=False
+    )
+    # This is a post-processing function in Spectractor and therefore isn't
+    # controlled by its top-level function, and thus doesn't map to a
+    # spectractor.parameters ALL_CAPS config option
+    doFitAtmosphereOnSpectrogram = pexConfig.Field(
+        dtype=bool,
+        doc="Experimental option to use uvspec to fit the atmosphere directly on the spectrogram?"
+            " Requires the binary to be available.",
         default=False
     )
 
@@ -470,6 +500,9 @@ class ProcessStarTaskConfig(pipeBase.PipelineTaskConfig,
         if uvspecPath is None and self.doFitAtmosphere is True:
             raise FieldValidationError(self.__class__.doFitAtmosphere, self, "uvspec is not in the path,"
                                        " but doFitAtmosphere is True.")
+        if uvspecPath is None and self.doFitAtmosphereOnSpectrogram is True:
+            raise FieldValidationError(self.__class__.doFitAtmosphereOnSpectrogram, self, "uvspec is not in"
+                                       " the path, but doFitAtmosphere is True.")
 
 
 class ProcessStarTask(pipeBase.PipelineTask):
@@ -887,23 +920,19 @@ class ProcessStarTask(pipeBase.PipelineTask):
         else:  # it's a raw tuple
             centroid = inputCentroid  # TODO: put this support in the docstring
 
-        spectraction = spectractor.run(inputExp, *centroid, target)
-
-        w = None
-        if self.config.doFitAtmosphere:
-            from spectractor.fit.fit_spectrum import SpectrumFitWorkspace, run_spectrum_minimisation
-            w = SpectrumFitWorkspace(spectraction.spectrum,
-                                     fit_angstrom_exponent=True,
-                                     verbose=True,
-                                     plot=True)
-            run_spectrum_minimisation(w, method="newton")
+        spectraction = spectractor.run(inputExp, *centroid, target,
+                                       self.config.doFitAtmosphere,
+                                       self.config.doFitAtmosphereOnSpectrogram)
 
         self.log.info("Finished processing %s" % (dataIdDict))
 
-        return pipeBase.Struct(spectractorSpectrum=spectraction.spectrum,
-                               spectractorImage=spectraction.image,
-                               spectractorFitParameters=w.params if w is not None else None,
-                               spectraction=spectraction)
+        return pipeBase.Struct(
+            spectractorSpectrum=spectraction.spectrum,
+            spectractorImage=spectraction.image,
+            spectrumForwardModelFitParameters=spectraction.spectrumForwardModelFitParameters,
+            spectrumLibradtranFitParameters=spectraction.spectrumLibradtranFitParameters,
+            spectrogramLibradtranFitParameters=spectraction.spectrogramLibradtranFitParameters
+        )
 
     def runAstrometry(self, butler, exp, icSrc):
         refObjLoaderConfig = ReferenceObjectLoader.ConfigClass()
