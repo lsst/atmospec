@@ -973,7 +973,7 @@ class ProcessStarTask(pipeBase.PipelineTask):
         sourceX = centroid[0]
         sourceY = centroid[1]
 
-        if(order == '-1'):
+        if order == '-1':
             translate_y = - extent - self.config.offsetFromMainStar
 
         xStart = sourceX - halfWidth
