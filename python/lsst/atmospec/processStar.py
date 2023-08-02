@@ -459,11 +459,11 @@ class ProcessStarTask(pipeBase.PipelineTask):
     ConfigClass = ProcessStarTaskConfig
     _DefaultName = "processStar"
 
-    def __init__(self, *, butler=None, **kwargs):
+    def __init__(self, **kwargs):
         # TODO: rename psfRefObjLoader to refObjLoader
         super().__init__(**kwargs)
         self.makeSubtask("isr")
-        self.makeSubtask("charImage", butler=butler, refObjLoader=None)
+        self.makeSubtask("charImage", refObjLoader=None)
 
         self.debug = lsstDebug.Info(__name__)
         if self.debug.enabled:
