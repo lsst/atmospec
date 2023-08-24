@@ -19,11 +19,14 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-__all__ = ['SpectractorSpectrumFormatter', 'SpectractorImageFormatter']
+__all__ = ['SpectractorSpectrumFormatter',
+           'SpectractorImageFormatter',
+           'SpectractorFitParametersFormatter']
 
 from lsst.daf.butler.formatters.file import FileFormatter
 from spectractor.extractor.spectrum import Spectrum
 from spectractor.extractor.images import Image
+from spectractor.fit.fitter import read_fitparameter_json, write_fitparameter_json
 
 
 class SpectractorSpectrumFormatter(FileFormatter):
@@ -46,3 +49,14 @@ class SpectractorImageFormatter(FileFormatter):
 
     def _writeFile(self, inMemoryDataset):
         inMemoryDataset.save_image(self.fileDescriptor.location.path)
+
+
+class SpectractorFitParametersFormatter(FileFormatter):
+    extension = '.json'
+    unsupportedParameters = None
+
+    def _readFile(self, path, pytype=None):
+        return read_fitparameter_json(path)
+
+    def _writeFile(self, inMemoryDataset):
+        write_fitparameter_json(self.fileDescriptor.location.path, inMemoryDataset)

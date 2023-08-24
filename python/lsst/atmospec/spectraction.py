@@ -38,6 +38,9 @@ from spectractor.extractor.extractor import (FullForwardModelFitWorkspace,  # no
                                              dumpParameters,
                                              run_spectrogram_deconvolution_psf2d)
 from spectractor.extractor.spectrum import Spectrum, calibrate_spectrum  # noqa: E402
+from spectractor.fit.fit_spectrum import SpectrumFitWorkspace, run_spectrum_minimisation  # noqa: E402
+from spectractor.fit.fit_spectrogram import (SpectrogramFitWorkspace,  # noqa: E402
+                                             run_spectrogram_minimisation)
 
 from lsst.daf.base import DateTime  # noqa: E402
 from .utils import getFilterAndDisperserFromExp  # noqa: E402
@@ -358,8 +361,13 @@ class SpectractorShim:
 
         airmass = vi.getBoresightAirmass()
         spectrum.adr_params = [dec, hourAngle, temperature, pressure, humidity, airmass]
+        spectrum.pressure = pressure
+        spectrum.humidity = humidity
+        spectrum.airmass = airmass
+        spectrum.temperature = temperature
 
-    def run(self, exp, xpos, ypos, target, outputRoot=None, plotting=True):
+    def run(self, exp, xpos, ypos, target, doFitAtmosphere, doFitAtmosphereOnSpectrogram,
+            outputRoot=None, plotting=True):
         # run option kwargs in the original code, seems to ~always be True
         atmospheric_lines = True
 
@@ -453,11 +461,31 @@ class SpectractorShim:
 
         # Full forward model extraction:
         # adds transverse ADR and order 2 subtraction
-        w = None
+        ffmWorkspace = None
         if parameters.SPECTRACTOR_DECONVOLUTION_FFM:
-            w = FullForwardModelFitWorkspace(spectrum, verbose=parameters.VERBOSE, plot=True, live_fit=False,
-                                             amplitude_priors_method="spectrum")
-            spectrum = run_ffm_minimisation(w, method="newton", niter=2)
+            ffmWorkspace = FullForwardModelFitWorkspace(spectrum, verbose=parameters.VERBOSE,
+                                                        plot=True,
+                                                        live_fit=False,
+                                                        amplitude_priors_method="spectrum")
+            spectrum = run_ffm_minimisation(ffmWorkspace, method="newton", niter=2)
+
+        # Fit the atmosphere on the spectrum using uvspec binary
+        spectrumAtmosphereWorkspace = None
+        if doFitAtmosphere:
+            spectrumAtmosphereWorkspace = SpectrumFitWorkspace(spectrum,
+                                                               fit_angstrom_exponent=True,
+                                                               verbose=parameters.VERBOSE,
+                                                               plot=True)
+            run_spectrum_minimisation(spectrumAtmosphereWorkspace, method="newton")
+
+        # Fit the atmosphere directly on the spectrogram using uvspec binary
+        spectrogramAtmosphereWorkspace = None
+        if doFitAtmosphereOnSpectrogram:
+            spectrogramAtmosphereWorkspace = SpectrogramFitWorkspace(spectrum,
+                                                                     fit_angstrom_exponent=True,
+                                                                     verbose=parameters.VERBOSE,
+                                                                     plot=True)
+            run_spectrogram_minimisation(spectrogramAtmosphereWorkspace, method="newton")
 
         # Save the spectrum
         self._ensureFitsHeader(spectrum)  # SIMPLE is missing by default
@@ -470,10 +498,12 @@ class SpectractorShim:
         result = Spectraction()
         result.spectrum = spectrum
         result.image = image
-        result.w = w
+        result.spectrumForwardModelFitParameters = ffmWorkspace.params if ffmWorkspace is not None else None
+        result.spectrumLibradtranFitParameters = (spectrumAtmosphereWorkspace.params if
+                                                  spectrumAtmosphereWorkspace is not None else None)
+        result.spectrogramLibradtranFitParameters = (spectrogramAtmosphereWorkspace.params if
+                                                     spectrogramAtmosphereWorkspace is not None else None)
 
-        # XXX technically this should be a pipeBase.Struct I think
-        # change it if it matters
         return result
 
 
