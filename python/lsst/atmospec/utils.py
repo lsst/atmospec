@@ -50,6 +50,7 @@ from astro_metadata_translator import ObservationInfo
 import lsst.pex.config as pexConfig
 from lsst.pipe.base import Pipeline
 from lsst.obs.lsst.translators.lsst import FILTER_DELIMITER
+from lsst.utils.iteration import ensure_iterable
 
 import astropy
 import astropy.units as u
@@ -573,7 +574,13 @@ def getFilterAndDisperserFromExp(exp):
     return filt, grating
 
 
-def runNotebook(dataId, outputCollection, taskConfigs={}, configOptions={}, embargo=False):
+def runNotebook(dataId,
+                outputCollection,
+                *,
+                extraInputCollections=None,
+                taskConfigs={},
+                configOptions={},
+                embargo=False):
     """Run the ProcessStar pipeline for a single dataId, writing to the
     specified output collection.
 
@@ -587,6 +594,8 @@ def runNotebook(dataId, outputCollection, taskConfigs={}, configOptions={}, emba
         The dataId to run.
     outputCollection : `str`, optional
         Output collection name.
+    extraInputCollections : `list` of `str`
+        Any extra input collections to use when processing.
     taskConfigs : `dict` [`lsst.pipe.base.PipelineTaskConfig`], optional
         Dictionary of config config classes. The key of the ``taskConfigs``
         dict is the relevant task label. The value of ``taskConfigs``
@@ -620,11 +629,12 @@ def runNotebook(dataId, outputCollection, taskConfigs={}, configOptions={}, emba
     repo = "LATISS" if not embargo else "/repo/embargo"
 
     # TODO: use LATISS_DEFAULT_COLLECTIONS here?
+    inputs = ['LATISS/raw/all', 'refcats', 'LATISS/calib']
+    if extraInputCollections is not None:
+        extraInputCollections = ensure_iterable(extraInputCollections)
+        inputs.extend(extraInputCollections)
     butler = SimplePipelineExecutor.prep_butler(repo,
-                                                inputs=['LATISS/raw/all',
-                                                        'refcats',
-                                                        'LATISS/calib',
-                                                        ],
+                                                inputs=inputs,
                                                 output=outputCollection)
 
     pipeline = Pipeline.fromFile("${ATMOSPEC_DIR}/pipelines/processStar.yaml")
