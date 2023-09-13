@@ -161,7 +161,7 @@ class ProcessStarTaskConfig(pipeBase.PipelineTaskConfig,
         dtype=bool,
         doc="Deconvolve the spectrogram with a simple 2D PSF analysis? "
         "SPECTRACTOR_DECONVOLUTION_PSF2D internally.",
-        default=False,
+        default=True,
     )
     doFullForwardModelDeconvolution = pexConfig.Field(
         dtype=bool,
