@@ -363,7 +363,7 @@ class ProcessStarTaskConfig(pipeBase.PipelineTaskConfig,
         dtype=int,
         doc="Step size in pixels for the first transverse PSF1D fit. "
         "PSF_PIXEL_STEP_TRANSVERSE_FIT internally.",
-        default=50,
+        default=10,
     )
     psfFwhmClip = pexConfig.Field(
         dtype=float,
