@@ -352,10 +352,21 @@ class SpectractorShim:
         hourAngle = asCoords.Angle(hourAngle.asDegrees(), unit=u.deg)
 
         weather = vi.getWeather()
+
         _temperature = weather.getAirTemperature()
-        temperature = _temperature if not np.isnan(_temperature) else 10  # maybe average?
+        if _temperature is None or np.isnan(_temperature):
+            self.log.warning("Temperature not set, using nominal value of 10 C")
+            _temperature = 10  # nominal value
+        temperature = _temperature
+
         _pressure = weather.getAirPressure()
-        pressure = _pressure if not np.isnan(_pressure) else 743  # nominal for altitude?
+        if _pressure is not None and not np.isnan(_pressure):
+            if _pressure > 10_000:
+                _pressure /= 100  # convert from Pa to hPa
+        else:
+            self.log.warning("Pressure not set, using nominal value of 743 hPa")
+            _pressure = 743  # nominal for altitude?
+        pressure = _pressure
         _humidity = weather.getHumidity()
         humidity = _humidity if not np.isnan(_humidity) else None  # not a required param so no default
 
