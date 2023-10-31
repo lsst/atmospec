@@ -310,7 +310,7 @@ class ProcessStarTaskConfig(pipeBase.PipelineTaskConfig,
         dtype=int,
         doc="Half transverse width of the signal rectangular window in pixels. "
         "PIXWIDTH_SIGNAL internally.",
-        default=40,
+        default=20,
     )
     backgroundDistance = pexConfig.Field(
         dtype=int,
@@ -356,7 +356,7 @@ class ProcessStarTaskConfig(pipeBase.PipelineTaskConfig,
         dtype=float,
         doc="Regularisation parameter for the chisq minimisation to extract the spectrum. "
         "PSF_FIT_REG_PARAM internally.",
-        default=1,
+        default=.1,
         # XXX allowed range strictly positive
     )
     psfTransverseStepSize = pexConfig.Field(
