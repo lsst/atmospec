@@ -191,14 +191,14 @@ class ProcessStarTaskConfig(pipeBase.PipelineTaskConfig,
         dtype=int,
         doc="Window x size to search for the target object. Ignored if targetCentroidMethod in ('exact, wcs')"
         "XWINDOW internally.",
-        default=100,
+        default=150,
     )
     yWindow = pexConfig.Field(
         dtype=int,
         doc="Window y size to search for the targeted object. Ignored if targetCentroidMethod in "
         "('exact, wcs')"
         "YWINDOW internally.",
-        default=100,
+        default=150,
     )
     xWindowRotated = pexConfig.Field(
         dtype=int,
