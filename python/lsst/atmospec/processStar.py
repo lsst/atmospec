@@ -310,7 +310,7 @@ class ProcessStarTaskConfig(pipeBase.PipelineTaskConfig,
         dtype=int,
         doc="Half transverse width of the signal rectangular window in pixels. "
         "PIXWIDTH_SIGNAL internally.",
-        default=20,
+        default=40,
     )
     backgroundDistance = pexConfig.Field(
         dtype=int,
