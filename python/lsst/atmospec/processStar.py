@@ -401,6 +401,18 @@ class ProcessStarTaskConfig(pipeBase.PipelineTaskConfig,
         "CALIB_SAVGOL_ORDER internally.",
         default=2,
     )
+    transmissionSystematicError = pexConfig.Field(
+        dtype=float,
+        doc="The systematic error on the instrumental transmission. OBS_TRANSMISSION_SYSTEMATICS internally",
+        default=0.005
+    )
+    instrumentTransmissionOverride = pexConfig.Field(
+        dtype=str,
+        doc="File to use for the full instrumental transmission. Must be located in the"
+        " $SPECTRACTOR_DIR/spectractor/simulation/AuxTelThroughput/ directory."
+        " OBS_FULL_INSTRUMENT_TRANSMISSON internally.",
+        default="multispectra_holo4_003_HD142331_AuxTel_throughput.txt"
+    )
     offsetFromMainStar = pexConfig.Field(
         dtype=int,
         doc="Number of pixels from the main star's centroid to start extraction",
@@ -851,6 +863,8 @@ class ProcessStarTask(pipeBase.PipelineTask):
             'CALIB_BGD_WIDTH': self.config.calibBackgroundWidth,
             'CALIB_SAVGOL_WINDOW': self.config.calibSavgolWindow,
             'CALIB_SAVGOL_ORDER': self.config.calibSavgolOrder,
+            'OBS_TRANSMISSION_SYSTEMATICS': self.config.transmissionSystematicError,
+            'OBS_FULL_INSTRUMENT_TRANSMISSON': self.config.instrumentTransmissionOverride,
 
             # Hard-coded parameters
             'OBS_NAME': 'AUXTEL',
