@@ -860,11 +860,10 @@ class ProcessStarTask(pipeBase.PipelineTask):
             'OBS_NAME': 'AUXTEL',
             'OBS_ALTITUDE': 2.66299616375123,  # XXX get this from / check with utils value
             'OBS_LATITUDE': -30.2446389756252,  # XXX get this from / check with utils value
-            'OBS_DIAMETER': 1.20,
             'OBS_EPOCH': "J2000.0",
             'OBS_CAMERA_DEC_FLIP_SIGN': 1,
             'OBS_CAMERA_RA_FLIP_SIGN': 1,
-            'OBS_SURFACE': np.pi * 1.2 ** 2 / 4.,
+            'OBS_SURFACE': 9636,
             'PAPER': False,
             'SAVE': False,
             'DISTANCE2CCD_ERR': 0.4,
