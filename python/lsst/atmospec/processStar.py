@@ -191,14 +191,14 @@ class ProcessStarTaskConfig(pipeBase.PipelineTaskConfig,
         dtype=int,
         doc="Window x size to search for the target object. Ignored if targetCentroidMethod in ('exact, wcs')"
         "XWINDOW internally.",
-        default=100,
+        default=150,
     )
     yWindow = pexConfig.Field(
         dtype=int,
         doc="Window y size to search for the targeted object. Ignored if targetCentroidMethod in "
         "('exact, wcs')"
         "YWINDOW internally.",
-        default=100,
+        default=150,
     )
     xWindowRotated = pexConfig.Field(
         dtype=int,
@@ -400,6 +400,18 @@ class ProcessStarTaskConfig(pipeBase.PipelineTaskConfig,
         doc="Polynomial order for the savgol filter. "
         "CALIB_SAVGOL_ORDER internally.",
         default=2,
+    )
+    transmissionSystematicError = pexConfig.Field(
+        dtype=float,
+        doc="The systematic error on the instrumental transmission. OBS_TRANSMISSION_SYSTEMATICS internally",
+        default=0.005
+    )
+    instrumentTransmissionOverride = pexConfig.Field(
+        dtype=str,
+        doc="File to use for the full instrumental transmission. Must be located in the"
+        " $SPECTRACTOR_DIR/spectractor/simulation/AuxTelThroughput/ directory."
+        " OBS_FULL_INSTRUMENT_TRANSMISSON internally.",
+        default="multispectra_holo4_003_HD142331_AuxTel_throughput.txt"
     )
     offsetFromMainStar = pexConfig.Field(
         dtype=int,
@@ -851,6 +863,8 @@ class ProcessStarTask(pipeBase.PipelineTask):
             'CALIB_BGD_WIDTH': self.config.calibBackgroundWidth,
             'CALIB_SAVGOL_WINDOW': self.config.calibSavgolWindow,
             'CALIB_SAVGOL_ORDER': self.config.calibSavgolOrder,
+            'OBS_TRANSMISSION_SYSTEMATICS': self.config.transmissionSystematicError,
+            'OBS_FULL_INSTRUMENT_TRANSMISSON': self.config.instrumentTransmissionOverride,
 
             # Hard-coded parameters
             'OBS_NAME': 'AUXTEL',
@@ -860,11 +874,10 @@ class ProcessStarTask(pipeBase.PipelineTask):
             'OBS_NAME': 'AUXTEL',
             'OBS_ALTITUDE': 2.66299616375123,  # XXX get this from / check with utils value
             'OBS_LATITUDE': -30.2446389756252,  # XXX get this from / check with utils value
-            'OBS_DIAMETER': 1.20,
             'OBS_EPOCH': "J2000.0",
             'OBS_CAMERA_DEC_FLIP_SIGN': 1,
             'OBS_CAMERA_RA_FLIP_SIGN': 1,
-            'OBS_SURFACE': np.pi * 1.2 ** 2 / 4.,
+            'OBS_SURFACE': 9636,
             'PAPER': False,
             'SAVE': False,
             'DISTANCE2CCD_ERR': 0.4,
