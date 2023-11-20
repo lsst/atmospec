@@ -530,7 +530,7 @@ class ProcessStarTask(pipeBase.PipelineTask):
         # TODO: rename psfRefObjLoader to refObjLoader
         super().__init__(**kwargs)
         self.makeSubtask("isr")
-        self.makeSubtask("charImage", refObjLoader=None)
+        self.makeSubtask("charImage")
 
         self.debug = lsstDebug.Info(__name__)
         if self.debug.enabled:
