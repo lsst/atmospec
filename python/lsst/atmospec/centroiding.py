@@ -101,6 +101,8 @@ class SingleStarCentroidTaskConfig(pipeBase.PipelineTaskConfig,
         self.astrometry.matcher.maxRotationDeg = 5.99
         self.astrometry.matcher.maxOffsetPix = 3000
         self.astrometry.sourceSelector['matcher'].minSnr = 10
+        self.astrometry.sourceSelector["science"].doRequirePrimary = False
+        self.astrometry.sourceSelector["science"].doIsolated = False
 
 
 class SingleStarCentroidTask(pipeBase.PipelineTask):

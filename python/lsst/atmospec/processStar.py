@@ -963,6 +963,8 @@ class ProcessStarTask(pipeBase.PipelineTask):
         astromConfig.matcher.maxRotationDeg = 5.99
         astromConfig.matcher.maxOffsetPix = 3000
         astromConfig.sourceSelector['matcher'].minSnr = 10
+        astromConfig.sourceSelector["science"].doRequirePrimary = False
+        astromConfig.sourceSelector["science"].doIsolated = False
         solver = AstrometryTask(config=astromConfig, refObjLoader=refObjLoader)
 
         # TODO: Change this to doing this the proper way
