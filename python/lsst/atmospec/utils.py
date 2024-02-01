@@ -42,7 +42,7 @@ import numpy as np
 import sys
 import lsst.afw.math as afwMath
 import lsst.afw.image as afwImage
-from lsst.ctrl.mpexec import SeparablePipelineExecutor
+from lsst.ctrl.mpexec import SeparablePipelineExecutor, SingleQuantumExecutor, MPGraphExecutor
 import lsst.afw.geom as afwGeom
 import lsst.geom as geom
 import lsst.daf.butler as dafButler
@@ -669,7 +669,22 @@ def runNotebook(dataId,
     executor.pre_execute_qgraph(quantumGraph, save_versions=False)
 
     logging.basicConfig(level=logging.INFO, stream=sys.stdout)
-    executor.run_pipeline(quantumGraph, fail_fast=True)
+
+    quantum_executor = SingleQuantumExecutor(
+        butler,
+        executor._task_factory,
+        skipExistingIn=executor._skip_existing_in,
+        clobberOutputs=executor._clobber_output,
+        resources=executor.resources,
+    )
+    graph_executor = MPGraphExecutor(
+        numProc=1,
+        timeout=2_592_000.0,  # In practice, timeout is never helpful; set to 30 days.
+        quantumExecutor=quantum_executor,
+        failFast=True,
+    )
+
+    executor.run_pipeline(quantumGraph, fail_fast=True, graph_executor=graph_executor)
 
     butler.registry.refresh()
     result = butler.get('spectractorSpectrum', dataId)
