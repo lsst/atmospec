@@ -21,6 +21,7 @@ tasks:
       repair.doCosmicRay: False
       doApCorr: False
       doMeasurePsf: False
+      doMaskStreaks: False
       detection.includeThresholdMultiplier: 3
       # assess carefully whether turning on cosmic ray repair hurts performance
   singleStarCentroid: lsst.atmospec.centroiding.SingleStarCentroidTask
