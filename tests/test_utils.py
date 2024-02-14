@@ -30,7 +30,7 @@ import numpy as np
 
 import lsst.utils
 import lsst.utils.tests
-from lsst.atmospec.utils import argMaxNd, getSamplePoints, airMassFromRawMetadata
+from lsst.atmospec.utils import argMaxNd, getSamplePoints, airMassFromRawMetadata, getFilterAndDisperserFromFilterFullName
 
 
 class AtmospecUtilsTestCase(lsst.utils.tests.TestCase):
@@ -101,6 +101,22 @@ class AtmospecUtilsTestCase(lsst.utils.tests.TestCase):
 
         # Bad header should return 0.0.
         self.assertEqual(airMassFromRawMetadata({}), 0.0)
+
+    def test_filter_name_parsing(self):
+        for filterFullName, filt, disperser in [
+            ('RG610~ronchi90lpmm', 'RG610', 'ronchi90lpmm'),
+            ('SDSSg_65mm~holo4_003', 'SDSSg_65mm', 'holo4_003'),
+            ('RG610~holo4_003', 'RG610', 'holo4_003'),
+            ('SDSSr~ronchi170lpmm', 'SDSSr', 'ronchi170lpmm'),
+            ('quadnotch1~ronchi170lpmm', 'quadnotch1', 'ronchi170lpmm'),
+            ('SDSSr_65mm~blue300lpmm_qn1', 'SDSSr_65mm', 'blue300lpmm_qn1'),
+            ('empty~SDSSy_65mm', 'SDSSy_65mm', 'empty'),
+            ('empty~SDSSi_65mm', 'SDSSi_65mm', 'empty')
+        ]:
+            self.assertEqual(
+                getFilterAndDisperserFromFilterFullName(filterFullName),
+                (filt, disperser)
+            )
 
 
 class TestMemory(lsst.utils.tests.MemoryTestCase):

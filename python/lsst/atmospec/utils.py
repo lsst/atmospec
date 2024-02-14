@@ -24,6 +24,7 @@ __all__ = [
     "gainFromFlatPair",
     "getAmpReadNoiseFromRawExp",
     "getLinearStagePosition",
+    "getFilterAndDisperserFromFilterFullName",
     "getFilterAndDisperserFromExp",
     "getSamplePoints",
     "getTargetCentroidFromWcs",
@@ -472,6 +473,22 @@ def vizierLocationForTarget(exp, target, doMotionCorrection):
     return targetLocation
 
 
+def _isDispersedFilterName(name):
+    """Determined from filter name if a disperser is present.
+
+    Parameters
+    ----------
+    name : `str`
+        The full filter name.
+
+    Returns
+    -------
+    isDispersed : `bool`
+        Whether the associated image is dispersed or not.
+    """
+    return any(f in name.lower() for f in ['ronchi', 'holo', 'lpmm'])
+
+
 def isDispersedExp(exp):
     """Check if an exposure is dispersed.
 
@@ -485,13 +502,7 @@ def isDispersedExp(exp):
     isDispersed : `bool`
         Whether it is a dispersed image or not.
     """
-    filterFullName = exp.filter.physicalLabel
-    if FILTER_DELIMITER not in filterFullName:
-        raise RuntimeError(f"Error parsing filter name {filterFullName}")
-    filt, grating = filterFullName.split(FILTER_DELIMITER)
-    if grating.upper().startswith('EMPTY'):
-        return False
-    return True
+    return _isDispersedFilterName(exp.filter.physicalLabel)
 
 
 def isDispersedDataId(dataId, butler):
@@ -524,12 +535,7 @@ def isDispersedDataId(dataId, butler):
         filterFullName = expRecords.pop().physical_filter
     else:
         raise RuntimeError(f'Expected a butler, got {type(butler)}')
-    if FILTER_DELIMITER not in filterFullName:
-        raise RuntimeError(f"Error parsing filter name {filterFullName}")
-    filt, grating = filterFullName.split(FILTER_DELIMITER)
-    if grating.upper().startswith('EMPTY'):
-        return False
-    return True
+    return _isDispersedFilterName(filterFullName)
 
 
 def getLinearStagePosition(exp):
@@ -554,6 +560,37 @@ def getLinearStagePosition(exp):
     return linearStagePosition
 
 
+def getFilterAndDisperserFromFilterFullName(filterFullName):
+    """Get the filter and disperser from the full filter name.
+
+    Parameters
+    ----------
+    filterFullName : `str`
+        The full filter name.
+
+    Returns
+    -------
+    filter, disperser : `tuple` of `str`
+        The filter and the disperser names.
+    """
+    wheels = filterFullName.split(FILTER_DELIMITER)
+    if len(wheels) != 2:
+        raise RuntimeError(f'Filter name "{filterFullName}" not in expected format')
+    isDisperser = [
+        _isDispersedFilterName(wheel)
+        for wheel in wheels
+    ]
+    if all(isDisperser):
+        raise RuntimeError(f'Found two dispersers in {filterFullName = }')
+    elif not any(isDisperser):
+        raise RuntimeError(f'Found no dispersers in {filterFullName = }')
+
+    if isDisperser[1]:
+        return tuple(wheels)
+    else:
+        return tuple(reversed(wheels))
+
+
 def getFilterAndDisperserFromExp(exp):
     """Get the filter and disperser from an exposure.
 
@@ -565,15 +602,10 @@ def getFilterAndDisperserFromExp(exp):
     Returns
     -------
     filter, disperser : `tuple` of `str`
-        The filter and the disperser names, as strings.
+        The filter and the disperser names.
     """
     filterFullName = exp.getFilter().physicalLabel
-    if FILTER_DELIMITER not in filterFullName:
-        filt = filterFullName
-        grating = exp.getInfo().getMetadata()['GRATING']
-    else:
-        filt, grating = filterFullName.split(FILTER_DELIMITER)
-    return filt, grating
+    return getFilterAndDisperserFromFilterFullName(filterFullName)
 
 
 def runNotebook(dataId,
