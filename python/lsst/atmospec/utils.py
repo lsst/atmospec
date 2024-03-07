@@ -522,9 +522,9 @@ def isDispersedDataId(dataId, butler):
         assert 'seq_num' in dataId or 'exposure.seq_num' in dataId, f'failed to find seq_num in {dataId}'
         seq_num = dataId['seq_num'] if 'seq_num' in dataId else dataId['exposure.seq_num']
         day_obs = dataId['day_obs'] if 'day_obs' in dataId else dataId['exposure.day_obs']
-        where = "exposure.day_obs=day_obs AND exposure.seq_num=seq_num"
+        where = "exposure.day_obs=dayObs AND exposure.seq_num=seq_num"
         expRecords = butler.registry.queryDimensionRecords("exposure", where=where,
-                                                           bind={'day_obs': day_obs,
+                                                           bind={'dayObs': day_obs,
                                                                  'seq_num': seq_num})
         expRecords = set(expRecords)
         assert len(expRecords) == 1, f'Found more than one exposure record for {dataId}'
