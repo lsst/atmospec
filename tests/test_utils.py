@@ -30,7 +30,7 @@ import numpy as np
 
 import lsst.utils
 import lsst.utils.tests
-from lsst.atmospec.utils import argMaxNd, getSamplePoints, airMassFromRawMetadata, getFilterAndDisperserFromFilterFullName
+from lsst.atmospec.utils import argMaxNd, getSamplePoints, airMassFromRawMetadata, getFilterAndDisperserFromFilterName
 
 
 class AtmospecUtilsTestCase(lsst.utils.tests.TestCase):
@@ -103,7 +103,7 @@ class AtmospecUtilsTestCase(lsst.utils.tests.TestCase):
         self.assertEqual(airMassFromRawMetadata({}), 0.0)
 
     def test_filter_name_parsing(self):
-        for filterFullName, filt, disperser in [
+        for filterName, filt, disperser in [
             ('RG610~ronchi90lpmm', 'RG610', 'ronchi90lpmm'),
             ('SDSSg_65mm~holo4_003', 'SDSSg_65mm', 'holo4_003'),
             ('RG610~holo4_003', 'RG610', 'holo4_003'),
@@ -114,7 +114,7 @@ class AtmospecUtilsTestCase(lsst.utils.tests.TestCase):
             ('empty~SDSSi_65mm', 'SDSSi_65mm', 'empty')
         ]:
             self.assertEqual(
-                getFilterAndDisperserFromFilterFullName(filterFullName),
+                getFilterAndDisperserFromFilterName(filterName),
                 (filt, disperser)
             )
 
