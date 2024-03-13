@@ -74,6 +74,7 @@ EMPTY_FILTERNAMES = [
     "blank", "empty", "unknown"
 ]
 
+
 def makeGainFlat(exposure, gainDict, invertGains=False):
     """Given an exposure, make a flat from the gains.
 
@@ -488,7 +489,7 @@ def vizierLocationForTarget(exp, target, doMotionCorrection):
 
 
 def _isDispersedFilterName(name):
-    """Determined from filter name if a disperser is present.
+    """Determine from filter name if a disperser is present.
 
     Parameters
     ----------
@@ -575,12 +576,12 @@ def getLinearStagePosition(exp):
 
 
 def getFilterAndDisperserFromFilterName(filterName):
-    """Get the filter and disperser from the full filter name.
+    """Get the filter and disperser from the filter name.
 
     Parameters
     ----------
     filterName : `str`
-        The full filter name.
+        The filter name.
 
     Returns
     -------
@@ -624,8 +625,8 @@ def parseFilterName(filterName):
     -------
     `dict`
         Dictionary with keys 'filter', 'disperser', 'other'.
-        Values are lists of strings with any found filters, dispersers, or other
-        elements (e.g., pinholes), and can be empty.
+        Values are lists of strings with any found filters, dispersers, or
+        other elements (e.g., pinholes), and can be empty.
     """
     out = {'filter': [], 'disperser': [], 'other': []}
     for wheel in filterName.split(FILTER_DELIMITER):
