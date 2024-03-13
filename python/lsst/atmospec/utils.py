@@ -24,7 +24,7 @@ __all__ = [
     "gainFromFlatPair",
     "getAmpReadNoiseFromRawExp",
     "getLinearStagePosition",
-    "getFilterAndDisperserFromFilterFullName",
+    "getFilterAndDisperserFromFilterName",
     "getFilterAndDisperserFromExp",
     "getSamplePoints",
     "getTargetCentroidFromWcs",
@@ -479,7 +479,7 @@ def _isDispersedFilterName(name):
     Parameters
     ----------
     name : `str`
-        The full filter name.
+        The filter name.
 
     Returns
     -------
@@ -532,10 +532,10 @@ def isDispersedDataId(dataId, butler):
                                                                  'seq_num': seq_num})
         expRecords = set(expRecords)
         assert len(expRecords) == 1, f'Found more than one exposure record for {dataId}'
-        filterFullName = expRecords.pop().physical_filter
+        filterName = expRecords.pop().physical_filter
     else:
         raise RuntimeError(f'Expected a butler, got {type(butler)}')
-    return _isDispersedFilterName(filterFullName)
+    return _isDispersedFilterName(filterName)
 
 
 def getLinearStagePosition(exp):
@@ -560,12 +560,12 @@ def getLinearStagePosition(exp):
     return linearStagePosition
 
 
-def getFilterAndDisperserFromFilterFullName(filterFullName):
+def getFilterAndDisperserFromFilterName(filterName):
     """Get the filter and disperser from the full filter name.
 
     Parameters
     ----------
-    filterFullName : `str`
+    filterName : `str`
         The full filter name.
 
     Returns
@@ -573,17 +573,17 @@ def getFilterAndDisperserFromFilterFullName(filterFullName):
     filter, disperser : `tuple` of `str`
         The filter and the disperser names.
     """
-    wheels = filterFullName.split(FILTER_DELIMITER)
+    wheels = filterName.split(FILTER_DELIMITER)
     if len(wheels) != 2:
-        raise RuntimeError(f'Filter name "{filterFullName}" not in expected format')
+        raise RuntimeError(f'Filter name "{filterName}" not in expected format')
     isDisperser = [
         _isDispersedFilterName(wheel)
         for wheel in wheels
     ]
     if all(isDisperser):
-        raise RuntimeError(f'Found two dispersers in {filterFullName = }')
+        raise RuntimeError(f'Found two dispersers in {filterName = }')
     elif not any(isDisperser):
-        raise RuntimeError(f'Found no dispersers in {filterFullName = }')
+        raise RuntimeError(f'Found no dispersers in {filterName = }')
 
     if isDisperser[1]:
         return tuple(wheels)
@@ -604,8 +604,8 @@ def getFilterAndDisperserFromExp(exp):
     filter, disperser : `tuple` of `str`
         The filter and the disperser names.
     """
-    filterFullName = exp.getFilter().physicalLabel
-    return getFilterAndDisperserFromFilterFullName(filterFullName)
+    filterName = exp.getFilter().physicalLabel
+    return getFilterAndDisperserFromFilterName(filterName)
 
 
 def runNotebook(dataId,
