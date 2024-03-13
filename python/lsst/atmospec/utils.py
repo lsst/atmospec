@@ -32,6 +32,7 @@ __all__ = [
     "isDispersedExp",
     "isExposureTrimmed",
     "makeGainFlat",
+    "parseFilterName",
     "rotateExposure",
     "simbadLocationForTarget",
     "vizierLocationForTarget",
@@ -59,6 +60,19 @@ import astropy
 import astropy.units as u
 from astropy.coordinates import SkyCoord, Distance
 
+
+OTHER_FILTERNAME_FRAGMENTS = [
+    "blank", "pinhole", "collimator", "cyl_lens", "solid plate", "diffuser",
+    "ellipses", "grid", "spot"
+]
+
+DISPERSER_FILTERNAME_FRAGMENTS = [
+    "ronchi", "holo", "lpmm"
+]
+
+EMPTY_FILTERNAMES = [
+    "blank", "empty", "unknown"
+]
 
 def makeGainFlat(exposure, gainDict, invertGains=False):
     """Given an exposure, make a flat from the gains.
@@ -486,7 +500,7 @@ def _isDispersedFilterName(name):
     isDispersed : `bool`
         Whether the associated image is dispersed or not.
     """
-    return any(f in name.lower() for f in ['ronchi', 'holo', 'lpmm'])
+    return any(f in name.lower() for f in DISPERSER_FILTERNAME_FRAGMENTS)
 
 
 def isDispersedExp(exp):
@@ -573,22 +587,12 @@ def getFilterAndDisperserFromFilterName(filterName):
     filter, disperser : `tuple` of `str`
         The filter and the disperser names.
     """
-    wheels = filterName.split(FILTER_DELIMITER)
-    if len(wheels) != 2:
-        raise RuntimeError(f'Filter name "{filterName}" not in expected format')
-    isDisperser = [
-        _isDispersedFilterName(wheel)
-        for wheel in wheels
-    ]
-    if all(isDisperser):
-        raise RuntimeError(f'Found two dispersers in {filterName = }')
-    elif not any(isDisperser):
-        raise RuntimeError(f'Found no dispersers in {filterName = }')
-
-    if isDisperser[1]:
-        return tuple(wheels)
-    else:
-        return tuple(reversed(wheels))
+    out = parseFilterName(filterName)
+    if len(out['filter']) > 1 or len(out['disperser']) > 1:
+        raise ValueError(f"Got more than one filter or disperser in {filterName}")
+    filt = out['filter'][0] if out['filter'] else ""
+    disperser = out['disperser'][0] if out['disperser'] else ""
+    return filt, disperser
 
 
 def getFilterAndDisperserFromExp(exp):
@@ -606,6 +610,34 @@ def getFilterAndDisperserFromExp(exp):
     """
     filterName = exp.getFilter().physicalLabel
     return getFilterAndDisperserFromFilterName(filterName)
+
+
+def parseFilterName(filterName):
+    """Parse the filter name.
+
+    Parameters
+    ----------
+    filterName : `str`
+        The filter name.
+
+    Returns
+    -------
+    `dict`
+        Dictionary with keys 'filter', 'disperser', 'other'.
+        Values are lists of strings with any found filters, dispersers, or other
+        elements (e.g., pinholes), and can be empty.
+    """
+    out = {'filter': [], 'disperser': [], 'other': []}
+    for wheel in filterName.split(FILTER_DELIMITER):
+        if wheel in EMPTY_FILTERNAMES:
+            continue
+        elif any(pattern in wheel.lower() for pattern in OTHER_FILTERNAME_FRAGMENTS):
+            out['other'].append(wheel)
+        elif _isDispersedFilterName(wheel):
+            out['disperser'].append(wheel)
+        else:
+            out['filter'].append(wheel)
+    return out
 
 
 def runNotebook(dataId,

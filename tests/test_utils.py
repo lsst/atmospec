@@ -30,7 +30,9 @@ import numpy as np
 
 import lsst.utils
 import lsst.utils.tests
-from lsst.atmospec.utils import argMaxNd, getSamplePoints, airMassFromRawMetadata, getFilterAndDisperserFromFilterName
+from lsst.atmospec.utils import (
+    argMaxNd, getSamplePoints, airMassFromRawMetadata, parseFilterName, getFilterAndDisperserFromFilterName
+)
 
 
 class AtmospecUtilsTestCase(lsst.utils.tests.TestCase):
@@ -103,20 +105,55 @@ class AtmospecUtilsTestCase(lsst.utils.tests.TestCase):
         self.assertEqual(airMassFromRawMetadata({}), 0.0)
 
     def test_filter_name_parsing(self):
-        for filterName, filt, disperser in [
-            ('RG610~ronchi90lpmm', 'RG610', 'ronchi90lpmm'),
-            ('SDSSg_65mm~holo4_003', 'SDSSg_65mm', 'holo4_003'),
-            ('RG610~holo4_003', 'RG610', 'holo4_003'),
-            ('SDSSr~ronchi170lpmm', 'SDSSr', 'ronchi170lpmm'),
-            ('quadnotch1~ronchi170lpmm', 'quadnotch1', 'ronchi170lpmm'),
-            ('SDSSr_65mm~blue300lpmm_qn1', 'SDSSr_65mm', 'blue300lpmm_qn1'),
-            ('empty~SDSSy_65mm', 'SDSSy_65mm', 'empty'),
-            ('empty~SDSSi_65mm', 'SDSSi_65mm', 'empty')
+        for (filterName, filt, disp, other) in [
+            ("SDSSr~empty", ["SDSSr"], [], []),
+            ("SDSSr~holo4_003", ["SDSSr"], ["holo4_003"], []),
+            ("quadnotch1~ronchi170lpmm", ["quadnotch1"], ["ronchi170lpmm"], []),
+            ("empty~SDSSy_65mm", ["SDSSy_65mm"], [], []),
+            ("empty~empty", [], [], []),
+            ("empty~holo4_003", [], ["holo4_003"], []),
+            ("HSC-G", ["HSC-G"], [], []),
+            ("Y DECam c0005 10095.0 1130.0", ["Y DECam c0005 10095.0 1130.0"], [], []),
+            ("blank_bk7_wg05~empty", [], [], ["blank_bk7_wg05"]),
+            ("solid plate 0.0 0.0", [], [], ["solid plate 0.0 0.0"]),
+            ("unknown", [], [], []),
+            ("unknown~unknown", [], [], []),
+            ("SDSSg_65mm~pinhole_1_1000", ["SDSSg_65mm"], [], ["pinhole_1_1000"]),
+            ("collimator~blue300lpmm_qn1", [], ["blue300lpmm_qn1"], ["collimator"]),
+            ("cyl_lens~blue300lpmm_qn1", [], ["blue300lpmm_qn1"], ["cyl_lens"]),
+            ("empty~pinhole_1_1000", [], [], ["pinhole_1_1000"]),
+            ("BG40_65mm_1~pinhole_1_0100", ["BG40_65mm_1"], [], ["pinhole_1_0100"]),
+            ("BG40_65mm_1~ronchi170lpmm", ["BG40_65mm_1"], ["ronchi170lpmm"], []),
+            ("collimator~pinhole_2_1_0100", [], [], ["collimator", "pinhole_2_1_0100"]),
+            ("cyl_lens~pinhole_1_0200", [], [], ["cyl_lens", "pinhole_1_0200"]),
+            ("diffuser", [], [], ["diffuser"]),
+            ("quadnotch1", ["quadnotch1"], [], []),
+            ("480nm~ND_OD2.0", ["480nm", "ND_OD2.0"], [], []),
+            ("SDSSr~ND_OD0.7", ["SDSSr", "ND_OD0.7"], [], []),
+            ("ef_43~HIGH", ["ef_43", "HIGH"], [], []),
+            ("ellipses", [], [], ["ellipses"]),
+            ("ellipses~ND_OD4.0", ["ND_OD4.0"], [], ["ellipses"]),
+            ("sparsegrid~ND_OD0.01", ["ND_OD0.01"], [], ["sparsegrid"]),
+            ("spot~ND_OD0.01", ["ND_OD0.01"], [], ["spot"]),
         ]:
             self.assertEqual(
-                getFilterAndDisperserFromFilterName(filterName),
-                (filt, disperser)
+                parseFilterName(filterName),
+                {
+                    "filter": filt,
+                    "disperser": disp,
+                    "other": other
+                }
             )
+            if len(filt) > 1 or len(disp) > 1:
+                with self.assertRaises(ValueError):
+                    getFilterAndDisperserFromFilterName(filterName)
+            else:
+                filt1 = filt[0] if filt else ""
+                disp1 = disp[0] if disp else ""
+                self.assertEqual(
+                    getFilterAndDisperserFromFilterName(filterName),
+                    (filt1, disp1)
+                )
 
 
 class TestMemory(lsst.utils.tests.MemoryTestCase):
