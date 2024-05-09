@@ -15,6 +15,9 @@ tasks:
       doSaturationInterpolation: True
       overscan.fitType: 'MEDIAN_PER_ROW'
       doBias: True
+      python : |
+        # if we turn PSF measurement on re-enable this plugin
+        config.measurement.plugins.names = set(config.measurement.plugins.names) - set(('base_ClassificationSizeExtendedness',))
   characterizeImage:
     class: lsst.pipe.tasks.characterizeImage.CharacterizeImageTask
     config:
