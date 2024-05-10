@@ -15,9 +15,6 @@ tasks:
       doSaturationInterpolation: True
       overscan.fitType: 'MEDIAN_PER_ROW'
       doBias: True
-      python : |
-        # if we turn PSF measurement on re-enable this plugin
-        config.measurement.plugins.names = set(config.measurement.plugins.names) - set(('base_ClassificationSizeExtendedness',))
   characterizeImage:
     class: lsst.pipe.tasks.characterizeImage.CharacterizeImageTask
     config:
@@ -26,6 +23,11 @@ tasks:
       doMeasurePsf: False
       doMaskStreaks: False
       detection.includeThresholdMultiplier: 3
+      python : |
+        # if we turn PSF measurement on re-enable this plugin
+        config.measurement.plugins.names = set(config.measurement.plugins.names) - set(('base_ClassificationSizeExtendedness',))
+
       # assess carefully whether turning on cosmic ray repair hurts performance
   singleStarCentroid: lsst.atmospec.centroiding.SingleStarCentroidTask
   processStar: lsst.atmospec.processStar.ProcessStarTask
+
