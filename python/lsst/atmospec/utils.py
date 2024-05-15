@@ -59,6 +59,13 @@ import astropy.units as u
 from astropy.coordinates import SkyCoord, Distance
 
 
+def getGainDict(exposure):
+    det = exposure.getDetector()
+    gainDict = {}
+    for amp in det:
+        gainDict[amp.getName()] = amp.getGain()
+    return gainDict
+
 def makeGainFlat(exposure, gainDict, invertGains=False):
     """Given an exposure, make a flat from the gains.
 
