@@ -23,40 +23,51 @@ __all__ = ['SpectractorSpectrumFormatter',
            'SpectractorImageFormatter',
            'SpectractorFitParametersFormatter']
 
-from lsst.daf.butler.formatters.file import FileFormatter
+from typing import Any
+from lsst.resources import ResourcePath
+from lsst.daf.butler import FormatterV2
 from spectractor.extractor.spectrum import Spectrum
 from spectractor.extractor.images import Image
 from spectractor.fit.fitter import read_fitparameter_json, write_fitparameter_json
 
 
-class SpectractorSpectrumFormatter(FileFormatter):
-    extension = '.fits'
-    unsupportedParameters = None
+class SpectractorSpectrumFormatter(FormatterV2):
+    default_extension = '.fits'
+    unsupported_parameters = None
+    can_read_from_local_file = True
 
-    def _readFile(self, path, pytype=None):
+    def read_from_local_file(
+        self, path: str, component: str | None = None, expected_size: int = -1
+    ) -> Any:
         return Spectrum(path)
 
-    def _writeFile(self, inMemoryDataset):
-        inMemoryDataset.save_spectrum(self.fileDescriptor.location.path)
+    def write_local_file(self, in_memory_dataset: Any, uri: ResourcePath) -> None:
+        in_memory_dataset.save_spectrum(uri.ospath)
 
 
-class SpectractorImageFormatter(FileFormatter):
-    extension = '.fits'
-    unsupportedParameters = None
+class SpectractorImageFormatter(FormatterV2):
+    default_extension = '.fits'
+    unsupported_parameters = None
+    can_read_from_local_file = True
 
-    def _readFile(self, path, pytype=None):
+    def read_from_local_file(
+        self, path: str, component: str | None = None, expected_size: int = -1
+    ) -> Any:
         return Image(path)
 
-    def _writeFile(self, inMemoryDataset):
-        inMemoryDataset.save_image(self.fileDescriptor.location.path)
+    def write_local_file(self, in_memory_dataset: Any, uri: ResourcePath) -> None:
+        in_memory_dataset.save_image(uri.ospath)
 
 
-class SpectractorFitParametersFormatter(FileFormatter):
-    extension = '.json'
-    unsupportedParameters = None
+class SpectractorFitParametersFormatter(FormatterV2):
+    default_extension = '.json'
+    unsupported_parameters = None
+    can_read_from_local_file = True
 
-    def _readFile(self, path, pytype=None):
+    def read_from_local_file(
+        self, path: str, component: str | None = None, expected_size: int = -1
+    ) -> Any:
         return read_fitparameter_json(path)
 
-    def _writeFile(self, inMemoryDataset):
-        write_fitparameter_json(self.fileDescriptor.location.path, inMemoryDataset)
+    def write_local_file(self, in_memory_dataset: Any, uri: ResourcePath) -> None:
+        write_fitparameter_json(uri.ospath, in_memory_dataset)
