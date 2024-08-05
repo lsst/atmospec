@@ -21,7 +21,6 @@ tasks:
       repair.doCosmicRay: False
       doApCorr: False
       doMeasurePsf: False
-      doMaskStreaks: False
       detection.includeThresholdMultiplier: 3
       python : |
         # if we turn PSF measurement on re-enable this plugin
