@@ -22,6 +22,7 @@ tasks:
       doApCorr: False
       doMeasurePsf: False
       detection.includeThresholdMultiplier: 3
+      doNormalizedCalibration: false
       python : |
         # if we turn PSF measurement on re-enable this plugin
         config.measurement.plugins.names = set(config.measurement.plugins.names) - set(('base_ClassificationSizeExtendedness',))
