@@ -601,7 +601,7 @@ def runNotebook(dataId,
     ----------
     dataId : `dict`
         The dataId to run.
-    outputCollection : `str`, optional
+    outputCollection : `str`
         Output collection name.
     extraInputCollections : `list` of `str`
         Any extra input collections to use when processing.

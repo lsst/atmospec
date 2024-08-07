@@ -755,8 +755,7 @@ class ProcessStarTask(pipeBase.PipelineTask):
 
     def runQuantum(self, butlerQC, inputRefs, outputRefs):
         inputs = butlerQC.get(inputRefs)
-
-        inputs['dataIdDict'] = inputRefs.inputExp.dataId.byName()
+        inputs['dataIdDict'] = inputRefs.inputExp.dataId
 
         outputs = self.run(**inputs)
         butlerQC.put(outputs, outputRefs)
