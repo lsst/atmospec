@@ -24,7 +24,8 @@ import lsst.pipe.base as pipeBase
 
 from lsst.meas.algorithms import LoadReferenceObjectsConfig, MagnitudeLimit, ReferenceObjectLoader
 from lsst.meas.astrom import AstrometryTask, FitAffineWcsTask
-from lsst.pipe.tasks.quickFrameMeasurement import (QuickFrameMeasurementTask)
+from lsst.pipe.tasks.quickFrameMeasurement import QuickFrameMeasurementTask
+from lsst.pipe.tasks.peekExposure import PeekExposureTask
 from lsst.pipe.base.task import TaskError
 import lsst.pipe.base.connectionTypes as cT
 import lsst.pex.config as pexConfig
@@ -77,9 +78,9 @@ class SingleStarCentroidTaskConfig(pipeBase.PipelineTaskConfig,
         target=AstrometryTask,
         doc="Task to perform astrometric calibration to refine the WCS",
     )
-    qfmTask = pexConfig.ConfigurableField(
-        target=QuickFrameMeasurementTask,
-        doc="XXX",
+    centroidingFallbackTask = pexConfig.ConfigurableField(
+        target=PeekExposureTask,
+        doc="The task to run find the brightest star if astrometry fails",
     )
     referenceFilterOverride = pexConfig.Field(
         dtype=str,
@@ -116,7 +117,7 @@ class SingleStarCentroidTask(pipeBase.PipelineTask):
         super().__init__(**kwargs)
 
         self.makeSubtask("astrometry", refObjLoader=None)
-        self.makeSubtask('qfmTask')
+        self.makeSubtask('centroidingFallbackTask')
 
     def runQuantum(self, butlerQC, inputRefs, outputRefs):
         inputs = butlerQC.get(inputRefs)
@@ -134,6 +135,18 @@ class SingleStarCentroidTask(pipeBase.PipelineTask):
 
         outputs = self.run(**inputs)
         butlerQC.put(outputs, outputRefs)
+
+    def runFallbackTask(self, exp):
+        task = self.centroidingFallbackTask
+        if isinstance(task, QuickFrameMeasurementTask):
+            result = task.run(exp)
+            return result.brightestObjCentroid  # tuple
+        elif isinstance(task, PeekExposureTask):
+            result = task.run(exp)
+            centroid = result.brightestCentroid  # Point2D
+            return (centroid[0], centroid[1])
+        else:
+            raise ValueError(f"Unsupported fallback task: {task}")
 
     def run(self, inputExp, inputSources):
         """XXX Docs
@@ -176,8 +189,7 @@ class SingleStarCentroidTask(pipeBase.PipelineTask):
                 successfulFit = False
                 self.log.warning(f'Failed to find target centroid for {target} via WCS')
         if not centroid:
-            result = self.qfmTask.run(inputExp)
-            centroid = result.brightestObjCentroid
+            centroid = self.runFallbackTask(inputExp)
 
         centroidTuple = (centroid[0], centroid[1])  # unify Point2D or tuple to tuple
         self.log.info(f"Centroid of main star found at {centroidTuple} found"
