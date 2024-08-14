@@ -636,7 +636,7 @@ def runNotebook(dataId,
         extraInputCollections = ensure_iterable(extraInputCollections)
         inputs.extend(extraInputCollections)
 
-    butler = dafButler.Butler(repo, writeable=True, collections=inputs)
+    butler = dafButler.Butler(repo, instrument='LATISS', writeable=True, collections=inputs)
 
     butler.registry.registerCollection(outputCollection, dafButler.CollectionType.CHAINED)
     run = outputCollection + '/run'
@@ -672,5 +672,5 @@ def runNotebook(dataId,
     executor.run_pipeline(quantumGraph, fail_fast=True)
 
     butler.registry.refresh()
-    result = butler.get('spectractorSpectrum', dataId)
+    result = butler.get('spectractorSpectrum', dataId, instrument='LATISS')
     return result
