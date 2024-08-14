@@ -640,7 +640,7 @@ def runNotebook(dataId,
 
     butler.registry.registerCollection(outputCollection, dafButler.CollectionType.CHAINED)
     run = outputCollection + '/run'
-    butler.registry.defaults = RegistryDefaults(collections=outputCollection, run=run)
+    butler.registry.defaults = RegistryDefaults(collections=outputCollection, run=run, instrument='LATISS')
     butler.registry.setCollectionChain(outputCollection, [run] + inputs)
     pipeline = Pipeline.fromFile("${ATMOSPEC_DIR}/pipelines/processStar.yaml")
 
