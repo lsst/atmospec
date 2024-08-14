@@ -344,8 +344,10 @@ class ProcessStarTaskConfig(pipeBase.PipelineTaskConfig,
         "PSF_TYPE internally.",
         default="Moffat",
         allowed={
+            "Gauss": "A Gauss function",
             "Moffat": "A Moffat function",
-            "MoffatGauss": "A Moffat plus a Gaussian"
+            "MoffatGauss": "A Moffat plus a Gaussian",
+            "DoubleMoffat": "A Double Moffat function"
         }
     )
     psfPolynomialOrder = pexConfig.Field(
