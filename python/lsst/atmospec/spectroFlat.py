@@ -46,14 +46,6 @@ def getCertifiedFlat(butler, dataId, filter='empty', disperser='empty'):
     return certifiedFlat
 
 
-def getGainDict(exposure):
-    det = exposure.getDetector()
-    gainDict = {}
-    for amp in det:
-        gainDict[amp.getName()] = amp.getGain()
-    return gainDict
-
-
 def getPTCGainDict(butler):
     ptc = butler.get('ptc', instrument="LATISS", detector=0, collections='u/cslage/sdf/latiss/ptc_20220927J')
     ptcGainDict = ptc.gain
