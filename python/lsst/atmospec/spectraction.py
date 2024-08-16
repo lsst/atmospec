@@ -218,12 +218,12 @@ class SpectractorShim:
         # xxx remove hard coding of 1 below!
         import lsst.daf.butler as dafButler
         butler = dafButler.Butler("/repo/embargo", collections=['LATISS/calib', 'LATISS/raw/all'])
-        PTCGainDict = getPTCGainDict(butler)
+        ptcGainDict = getPTCGainDict(butler)
         certifiedFlat = getCertifiedFlat(butler, dataId=exp.visitInfo.id, filter="empty")
-        image.gain = self._transformArrayFromExpToImage(makeGainFlat(certifiedFlat, PTCGainDict).image.array)
+        image.gain = self._transformArrayFromExpToImage(makeGainFlat(certifiedFlat, ptcGainDict).image.array)
         self._setStatErrorInImage(image, exp, useExpVariance=False)
         self._setMask(image, exp)
-        sensorFlat = makeSensorFlat(certifiedFlat, PTCGainDict, kernel="mean", invertGains=True)
+        sensorFlat = makeSensorFlat(certifiedFlat, ptcGainDict, kernel="mean", invertGains=True)
         image.flat = self._transformArrayFromExpToImage(sensorFlat.image.array)
 
         self._setImageAndHeaderInfo(image, exp)  # sets image attributes
@@ -318,9 +318,9 @@ class SpectractorShim:
             image.compute_statistical_error()
 
     def _setMask(self, image, exp):
-        BAD = exp.getMask().getPlaneBitMask("BAD")
-        CR = exp.getMask().getPlaneBitMask("CR")
-        badPixels = np.logical_or((exp.getMask().array & BAD) > 0, (exp.getMask().array & CR) > 0)
+        badBit = exp.getMask().getPlaneBitMask("BAD")
+        crBit = exp.getMask().getPlaneBitMask("CR")
+        badPixels = np.logical_or((exp.getMask().array & badBit) > 0, (exp.getMask().array & crBit) > 0)
         image.mask = self._transformArrayFromExpToImage(badPixels)
 
     def _setGainFromExp(self, spectractorImage, exp, constValue=None):
