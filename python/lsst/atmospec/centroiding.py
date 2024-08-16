@@ -105,6 +105,15 @@ class SingleStarCentroidTaskConfig(pipeBase.PipelineTaskConfig,
         self.astrometry.sourceSelector["science"].doRequirePrimary = False
         self.astrometry.sourceSelector["science"].doIsolated = False
 
+    def validate(self):
+        super().validate()
+        task = self.centroidingFallbackTask
+        # note these aren't instantiated yet, so we can't check the type
+        # of the instance, just the target. _DefaultName is a class attribute
+        # that definitely exists, but has a lower case first letter.
+        if task.target._DefaultName not in ('quickFrameMeasurementTask', 'peekExposureTask'):
+            raise ValueError(f"centroidingFallbackTask is of unknown type {task.target}")
+
 
 class SingleStarCentroidTask(pipeBase.PipelineTask):
     """XXX Docs here
