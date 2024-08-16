@@ -44,7 +44,7 @@ from spectractor.fit.fit_spectrogram import (SpectrogramFitWorkspace,  # noqa: E
 
 from lsst.daf.base import DateTime  # noqa: E402
 from .utils import getFilterAndDisperserFromExp  # noqa: E402
-from .spectroFlat import getGainDict, getPTCGainDict, makeSensorFlat, getCertifiedFlat, makeGainFlat   # noqa: E402
+from .spectroFlat import getPTCGainDict, makeSensorFlat, getCertifiedFlat, makeGainFlat   # noqa: E402
 
 
 class SpectractorShim:
@@ -217,8 +217,7 @@ class SpectractorShim:
         self._setReadNoiseFromExp(image, exp, 8.5)
         # xxx remove hard coding of 1 below!
         import lsst.daf.butler as dafButler
-        # butler = dafButler.Butler("/sdf/group/rubin/repo/oga/", collections=['LATISS/calib','LATISS/raw/all'])
-        butler = dafButler.Butler("/repo/embargo", collections=['LATISS/calib','LATISS/raw/all'])
+        butler = dafButler.Butler("/repo/embargo", collections=['LATISS/calib', 'LATISS/raw/all'])
         PTCGainDict = getPTCGainDict(butler)
         certifiedFlat = getCertifiedFlat(butler, dataId=exp.visitInfo.id, filter="empty")
         image.gain = self._transformArrayFromExpToImage(makeGainFlat(certifiedFlat, PTCGainDict).image.array)
@@ -282,7 +281,8 @@ class SpectractorShim:
         return self._transformArrayFromExpToImage(data)
 
     def _transformArrayFromExpToImage(self, array):
-        # apply transformation on an exposure array to have correct orientation in Spectractor Image
+        # apply transformation on an exposure array to have correct orientation
+        # in Spectractor Image
         return array.T[::, ::]
 
     def _setReadNoiseFromExp(self, spectractorImage, exp, constValue=None):
@@ -293,16 +293,20 @@ class SpectractorShim:
             # TODO: Check with Jeremy if we want the raw read noise
             # or the per-pixel variance. Either is doable, just need to know.
             raise NotImplementedError("Setting noise image from exp variance not implemented")
-            raw = butler.get('raw',instrument='LATISS', exposure=dataId, detector=0, collections=['LATISS/calib','LATISS/raw/all'])
-            det=raw.getDetector()
+            raw = butler.get('raw', instrument='LATISS', exposure=dataId, detector=0,
+                             collections=['LATISS/calib', 'LATISS/raw/all'])
+            det = raw.getDetector()
             raw_image = raw.getImage()
             spectractorImage.read_out_noise = np.zeros_like(spectractorImage.data)
-            for amp_cur in det :
-                noise_over_serial_fliped=(raw_image[amp_cur.getRawSerialOverscanBBox()].array)[:,:-2].std(axis=0).mean()
+            for amp in det:
+                ampData = raw_image[amp.getRawSerialOverscanBBox()].array
+                noise_over_serial_fliped = ampData[:, :-2].std(axis=0).mean()
                 bbox = amp.getBBox()
                 spectractorImage.read_out_noise[bbox] = noise_over_serial_fliped
-                print('amp name=',amp_cur.getName(),'header noise ? =',amp_cur.getReadNoise(),'header gain ? =',amp_cur.getGain(),'(flip =',noise_over_serial_fliped,')')
-
+                print('amp name=', amp.getName(),
+                      ' header noise ? =', amp.getReadNoise(),
+                      'header gain ? =', amp.getGain(),
+                      '(flip =', noise_over_serial_fliped, ')')
 
     def _setReadNoiseToNone(self, spectractorImage):
         spectractorImage.read_out_noise = None
@@ -318,7 +322,7 @@ class SpectractorShim:
         CR = exp.getMask().getPlaneBitMask("CR")
         badPixels = np.logical_or((exp.getMask().array & BAD) > 0, (exp.getMask().array & CR) > 0)
         image.mask = self._transformArrayFromExpToImage(badPixels)
-    
+
     def _setGainFromExp(self, spectractorImage, exp, constValue=None):
         # xxx need to implement this properly
         # Note that this is array-like and per-amplifier

@@ -66,6 +66,7 @@ def getGainDict(exposure):
         gainDict[amp.getName()] = amp.getGain()
     return gainDict
 
+
 def makeGainFlat(exposure, gainDict, invertGains=False):
     """Given an exposure, make a flat from the gains.
 

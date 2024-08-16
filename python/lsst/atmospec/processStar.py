@@ -518,11 +518,11 @@ class ProcessStarTaskConfig(pipeBase.PipelineTaskConfig,
         except ModuleNotFoundError:
             getObsAtmo = None
         if uvspecPath is None and getObsAtmo is None and self.doFitAtmosphere is True:
-            raise FieldValidationError(self.__class__.doFitAtmosphere, self, 
-                                       "uvspec is not in the path nor getObsAtmo is installed,"
+            raise FieldValidationError(self.__class__.doFitAtmosphere, self,
+                                       "uvspec is not in the path nor getObsAtmo is instaled,"
                                        " but doFitAtmosphere is True.")
-        if uvspecPath is None  and getObsAtmo is None and self.doFitAtmosphereOnSpectrogram is True:
-            raise FieldValidationError(self.__class__.doFitAtmosphereOnSpectrogram, self, 
+        if uvspecPath is None and getObsAtmo is None and self.doFitAtmosphereOnSpectrogram is True:
+            raise FieldValidationError(self.__class__.doFitAtmosphereOnSpectrogram, self,
                                        "uvspec is not in the path nor getObsAtmo is installed,"
                                        " the path, but doFitAtmosphere is True.")
 

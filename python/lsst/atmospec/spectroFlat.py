@@ -6,20 +6,19 @@ import logging
 from scipy.ndimage import median_filter, uniform_filter, gaussian_filter
 
 
-# Butler
-# import lsst.daf.butler as dafButler
-# butler = dafButler.Butler(repo, collections=calibCollections)
-
-
 def find_flats(butler, cameraName='LATISS', filter='empty', disperser='empty', obs_type='flat'):
     registry = butler.registry
     physical_filter = f'{filter}~{disperser}'
-    where = f"instrument='{cameraName}' AND physical_filter='{physical_filter}' AND exposure.observation_type='{obs_type}'"
+    where = (
+        f"instrument='{cameraName}' AND physical_filter='{physical_filter}' "
+        f"AND exposure.observation_type='{obs_type}'"
+    )
     flat_records = list(registry.queryDimensionRecords('exposure', where=where))
 
     if len(flat_records) == 0:
         raise ValueError(
-            'WARNING: No flats found with the selected settings: \n{cameraName=} {physical_filter=} {obs_type=}')
+            'WARNING: No flats found with the selected settings: \n'
+            f'{cameraName=} {physical_filter=} {obs_type=}')
 
     flat_dates = np.sort(np.unique([flat_.day_obs for flat_ in flat_records]))
     ids_ = [flat_.id for flat_ in flat_records]
@@ -117,19 +116,27 @@ def makeOpticFlat(certifiedFlat, kernel='mean', window_size=40, mode='mirror', p
         data /= np.median(data)
         if kernel == 'gauss':
             logger.info(f'Pixel flat smoothing with Gaussian filter with {window_size=}.')
-            # 'ATTENTION: window size should be equal to Gaussian standard deviation (sigma)'
-            opticFlat[bbox].maskedImage.image.array[:, :] = gaussian_filter(data, sigma=window_size, mode=mode)
+            # 'ATTENTION: window size should be equal to Gaussian standard
+            # deviation (sigma)'
+            opticFlat[bbox].maskedImage.image.array[:, :] = gaussian_filter(data, sigma=window_size,
+                                                                            mode=mode)
         elif kernel == 'mean':
             logger.info(
-                f'Pixel flat smoothing with mean filter.\nMasking outliers <{percentile:.2f} and >{100. - percentile:.2f} percentiles')
-            mask = (data >= np.percentile(data.flatten(), percentile)) * (
-                        data <= np.percentile(data.flatten(), 100. - percentile))
+                f'Pixel flat smoothing with mean filter.\n'
+                f'Masking outliers <{percentile:.2f} and >{100. - percentile:.2f} percentiles'
+            )
+            mask = (
+                data >= np.percentile(data.flatten(), percentile)) * (
+                data <= np.percentile(data.flatten(), 100. - percentile)
+            )
             interp_array = np.copy(data)
             interp_array[~mask] = np.median(data)
-            opticFlat[bbox].maskedImage.image.array[:, :] = uniform_filter(interp_array, size=window_size, mode=mode)
+            opticFlat[bbox].maskedImage.image.array[:, :] = uniform_filter(interp_array, size=window_size,
+                                                                           mode=mode)
         elif kernel == 'median':
             logger.info(f'Pixel flat smoothing with median filter with {window_size=}.')
-            opticFlat[bbox].maskedImage.image.array[:, :] = median_filter(data, size=(window_size, window_size),
+            opticFlat[bbox].maskedImage.image.array[:, :] = median_filter(data,
+                                                                          size=(window_size, window_size),
                                                                           mode=mode)
         else:
             raise ValueError(f'Kernel must be within ["mean", "median", "gauss"]. Got {kernel=}.')
@@ -139,34 +146,52 @@ def makeOpticFlat(certifiedFlat, kernel='mean', window_size=40, mode='mirror', p
     return opticFlat
 
 
-def makePixelFlat(certifiedFlat, kernel='mean', window_size=40, mode='mirror', percentile=1., remove_background=True):
+def makePixelFlat(
+    certifiedFlat,
+    kernel='mean',
+    window_size=40,
+    mode='mirror',
+    percentile=1.,
+    remove_background=True
+):
     logger = logging.getLogger()
     logger.info(f'Window size for {kernel} smoothing = {window_size}')
     pixelFlat = certifiedFlat.clone()
-    opticFlat = makeOpticFlat(certifiedFlat, kernel=kernel, window_size=window_size, mode=mode, percentile=percentile)
+    opticFlat = makeOpticFlat(certifiedFlat, kernel=kernel, window_size=window_size, mode=mode,
+                              percentile=percentile)
 
     detector = opticFlat.getDetector()
     for amp in detector:
         bbox = amp.getBBox()
-        pixelFlat[bbox].maskedImage.image.array[:, :] /= np.median(pixelFlat[bbox].maskedImage.image.array[:, :])
-        pixelFlat[bbox].maskedImage.image.array[:, :] /= opticFlat[bbox].maskedImage.image.array[:, :]
+        ampData = pixelFlat[bbox].maskedImage.image.array[:, :]
+        ampData /= np.median(ampData)
+        ampData /= opticFlat[bbox].maskedImage.image.array[:, :]
         if remove_background:
             from astropy.stats import SigmaClip
             from photutils.background import Background2D, MedianBackground
             sigma_clip = SigmaClip(sigma=3.0)
             bkg_estimator = MedianBackground()
-            bkg = Background2D(pixelFlat[bbox].maskedImage.image.array[:, :], (20, 20), filter_size=(3, 3), sigma_clip=sigma_clip, bkg_estimator=bkg_estimator)
-            pixelFlat[bbox].maskedImage.image.array[:, :] /= bkg.background
-
-
-            
+            bkg = Background2D(ampData, (20, 20),
+                               filter_size=(3, 3),
+                               sigma_clip=sigma_clip,
+                               bkg_estimator=bkg_estimator)
+            ampData /= bkg.background
 
     pixelFlat.maskedImage.mask[:] = 0x0
     pixelFlat.maskedImage.variance[:] = 0.0
     return pixelFlat
 
 
-def makeSensorFlat(certifiedFlat, gainDict, kernel='mean', window_size=40, mode='mirror', percentile=1., invertGains=False, remove_background=True):
+def makeSensorFlat(
+    certifiedFlat,
+    gainDict,
+    kernel='mean',
+    window_size=40,
+    mode='mirror',
+    percentile=1.,
+    invertGains=False,
+    remove_background=True
+):
     logger = logging.getLogger()
     logger.info(f'Window size for {kernel} smoothing = {window_size}')
     pixelFlat = makePixelFlat(certifiedFlat, kernel=kernel, window_size=window_size, mode=mode,
