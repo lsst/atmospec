@@ -482,7 +482,8 @@ class SpectractorShim:
                                                                   parameters.PIXDIST_BACKGROUND
                                                                   + parameters.PIXWIDTH_BACKGROUND))
         spectrum.atmospheric_lines = atmospheric_lines
-        spectrum.plot_spectrum()
+        if plotting:
+            spectrum.plot_spectrum()
 
         # PSF2D deconvolution
         if parameters.SPECTRACTOR_DECONVOLUTION_PSF2D:
