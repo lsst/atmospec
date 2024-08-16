@@ -5,8 +5,24 @@ import logging
 
 from scipy.ndimage import median_filter, uniform_filter, gaussian_filter
 
+"""
+The goal of this module is to provide a simple interface to build a flat adapted to
+empty~holo4_003 AuxTel exposures. The more recent empty~empty AuxTel certified flat
+is found for a given empty~holo4_003 AuxTel exposure. It is then 
+
+"""
+
 
 def findFlats(butler, cameraName='LATISS', filter='empty', disperser='empty', obsType='flat'):
+    """Find the certified flats for a given instrument and set of filters
+
+    :param butler:
+    :param cameraName:
+    :param filter:
+    :param disperser:
+    :param obsType:
+    :return:
+    """
     registry = butler.registry
     physicalFilter = f'{filter}~{disperser}'
     where = (
@@ -35,6 +51,15 @@ def findFlats(butler, cameraName='LATISS', filter='empty', disperser='empty', ob
 
 
 def getCertifiedFlat(butler, dataId, filter='empty', disperser='empty'):
+    """Get the certified flats for a given instrument and set of filters the most recent
+    considering the provided data Id.
+
+    :param butler:
+    :param dataId:
+    :param filter:
+    :param disperser:
+    :return:
+    """
     flatDates, flatIds = findFlats(butler, filter=filter, disperser=disperser)
     dayObs = dataId // 100_000
     dateDiff = int(dayObs) - flatDates
@@ -47,6 +72,11 @@ def getCertifiedFlat(butler, dataId, filter='empty', disperser='empty'):
 
 
 def getPTCGainDict(butler):
+    """Get the PTC gains from a LATISS collection.
+
+    :param butler:
+    :return:
+    """
     ptc = butler.get('ptc', instrument="LATISS", detector=0, collections='u/cslage/sdf/latiss/ptc_20220927J')
     ptcGainDict = ptc.gain
     return ptcGainDict
@@ -98,6 +128,18 @@ def makeGainFlat(certifiedFlat, gainDict, invertGains=False):
 
 
 def makeOpticFlat(certifiedFlat, kernel='mean', windowSize=40, mode='mirror', percentile=1.):
+    """Build an Optic Flat from a certified Flat.
+     An Optic Flat contains only the large-scale defects coming from the optics.
+     The different amplifiers are rescaled to median=1, and small scale defects are filtered.
+     If kernel='mean' filter is used, outlier pixels below the percentile threshold are filtered out.
+
+    :param certifiedFlat:
+    :param kernel:
+    :param windowSize:
+    :param mode:
+    :param percentile:
+    :return:
+    """
     logger = logging.getLogger()
     opticFlat = certifiedFlat.clone()
 
@@ -146,6 +188,17 @@ def makePixelFlat(
     percentile=1.,
     removeBackground=True
 ):
+    """Build a Pixel Flat from a certified Flat.
+     A Pixel Flat contains only the defects coming from the pixel efficiencies.
+
+    :param certifiedFlat:
+    :param kernel:
+    :param windowSize:
+    :param mode:
+    :param percentile:
+    :param removeBackground:
+    :return:
+    """
     logger = logging.getLogger()
     logger.info(f'Window size for {kernel} smoothing = {windowSize}')
     pixelFlat = certifiedFlat.clone()
@@ -184,6 +237,19 @@ def makeSensorFlat(
     invertGains=False,
     removeBackground=True
 ):
+    """Build a Sensor Flat from a certified Flat.
+     A Sensor Flat contains only the defects coming from the Sensor (pixel efficiencies, amplifier gains).
+
+    :param certifiedFlat:
+    :param gainDict:
+    :param kernel:
+    :param windowSize:
+    :param mode:
+    :param percentile:
+    :param invertGains:
+    :param removeBackground:
+    :return:
+    """
     logger = logging.getLogger()
     logger.info(f'Window size for {kernel} smoothing = {windowSize}')
     pixelFlat = makePixelFlat(certifiedFlat, kernel=kernel, windowSize=windowSize, mode=mode,
