@@ -30,3 +30,4 @@ tasks:
       # assess carefully whether turning on cosmic ray repair hurts performance
   singleStarCentroid: lsst.atmospec.centroiding.SingleStarCentroidTask
   processStar: lsst.atmospec.processStar.ProcessStarTask
+

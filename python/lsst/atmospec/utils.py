@@ -59,6 +59,14 @@ import astropy.units as u
 from astropy.coordinates import SkyCoord, Distance
 
 
+def getGainDict(exposure):
+    det = exposure.getDetector()
+    gainDict = {}
+    for amp in det:
+        gainDict[amp.getName()] = amp.getGain()
+    return gainDict
+
+
 def makeGainFlat(exposure, gainDict, invertGains=False):
     """Given an exposure, make a flat from the gains.
 
@@ -636,7 +644,7 @@ def runNotebook(dataId,
         extraInputCollections = ensure_iterable(extraInputCollections)
         inputs.extend(extraInputCollections)
 
-    butler = dafButler.Butler(repo, writeable=True, collections=inputs)
+    butler = dafButler.Butler(repo, instrument='LATISS', writeable=True, collections=inputs)
 
     butler.registry.registerCollection(outputCollection, dafButler.CollectionType.CHAINED)
     run = outputCollection + '/run'
@@ -672,5 +680,5 @@ def runNotebook(dataId,
     executor.run_pipeline(quantumGraph, fail_fast=True)
 
     butler.registry.refresh()
-    result = butler.get('spectractorSpectrum', dataId)
+    result = butler.get('spectractorSpectrum', dataId, instrument='LATISS')
     return result
