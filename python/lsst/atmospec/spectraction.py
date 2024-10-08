@@ -267,15 +267,19 @@ class SpectractorShim:
                 image.header.airmass = md['AIRMASS']
                 image.airmass = md['AIRMASS']
                 image.date_obs = md['DATE']
-                image.header['DOMEAZ'] = md['DOMEAZ']
-                image.header['AZ'] = md['AZSTART']
-                image.header['RA'] = md['RA']
-                image.header['MJD'] = md['MJD']
-                image.header['FOCUSZ'] = md['FOCUSZ']
-                image.header['WINDSPD'] = md['WINDDIR']
         except Exception:
             self.log.warn("Failed to set AIRMASS, default value of 1 used")
             image.header.airmass = 1.
+
+        # get supplementary metadata
+        md = exp.getMetadata().toDict()
+        image.header['DOMEAZ'] = md['DOMEAZ']
+        image.header['AZ'] = md['AZSTART']
+        image.header['EL'] = md['ELSTART']
+        image.header['RA'] = md['RA']
+        image.header['MJD'] = md['MJD']
+        image.header['WINDSPD'] = md['WINDSPD']
+        image.header['WINDDIR'] = md['WINDDIR']
 
         return
 
