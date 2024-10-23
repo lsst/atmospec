@@ -62,8 +62,8 @@ def getCertifiedFlat(butler, dataId, filter='empty', disperser='empty'):
     """
     flatDates, flatIds = findFlats(butler, filter=filter, disperser=disperser)
     dayObs = dataId // 100_000
-    dateDiff = int(dayObs) - flatDates
-    closestDate = flatDates[np.argmax(dateDiff[dateDiff <= 0])]
+    dateDiff = np.abs(int(dayObs) - flatDates)
+    closestDate = flatDates[np.argmin(dateDiff)]
     # load flat
     flatId = flatIds[closestDate][-1]
     certifiedFlat = butler.get('flat', instrument='LATISS', exposure=flatId, detector=0,
