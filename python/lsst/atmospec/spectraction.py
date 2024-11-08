@@ -217,7 +217,7 @@ class SpectractorShim:
         self._setReadNoiseFromExp(image, exp, 8.5)
         # xxx remove hard coding of 1 below!
         import lsst.daf.butler as dafButler
-        butler = dafButler.Butler("/repo/embargo", collections=['LATISS/calib', 'LATISS/raw/all'])
+        butler = dafButler.Butler("/repo/embargo_old", collections=['LATISS/calib', 'LATISS/raw/all'])
         ptcGainDict = getPTCGainDict(butler)
         certifiedFlat = getCertifiedFlat(butler, dataId=exp.visitInfo.id, filter="empty")
         image.gain = self._transformArrayFromExpToImage(makeGainFlat(certifiedFlat, ptcGainDict).image.array)

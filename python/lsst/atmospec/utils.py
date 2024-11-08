@@ -636,7 +636,7 @@ def runNotebook(dataId,
                        "instrument='LATISS'")
 
         return queryString
-    repo = "LATISS" if not embargo else "/repo/embargo"
+    repo = "LATISS" if not embargo else "/repo/embargo_old"
 
     # TODO: use LATISS_DEFAULT_COLLECTIONS here?
     inputs = ['LATISS/raw/all', 'refcats', 'LATISS/calib']
