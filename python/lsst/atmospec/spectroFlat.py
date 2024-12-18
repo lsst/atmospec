@@ -67,7 +67,7 @@ def getCertifiedFlat(butler, dataId, filter='empty', disperser='empty'):
     # load flat
     flatId = flatIds[closestDate][-1]
     certifiedFlat = butler.get('flat', instrument='LATISS', exposure=flatId, detector=0,
-                               collections=['LATISS/calib', 'LATISS/raw/all'])
+                               collections=['LATISS/calib', 'LATISS/calib/legacy', 'LATISS/raw/all'])
     return certifiedFlat
 
 
