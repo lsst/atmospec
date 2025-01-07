@@ -1,3 +1,4 @@
+.coverage*
 _build.*
 .sconsign.dblite
 config.log
@@ -22,3 +23,4 @@ version.py
 bin
 .pytest_cache
 _bestfit.pdf
+python/*.dist-info/
