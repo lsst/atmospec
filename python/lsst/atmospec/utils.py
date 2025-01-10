@@ -554,7 +554,7 @@ def getLinearStagePosition(exp):
         The position of the linear stage, in mm.
     """
     md = exp.getMetadata()
-    linearStagePosition = 115  # this seems to be the rough zero-point for some reason
+    linearStagePosition = 116.1  # this seems to be the rough zero-point for some reason
     if 'LINSPOS' in md:
         position = md['LINSPOS']  # linear stage position in mm from CCD, larger->further from CCD
         if position is not None:
@@ -590,7 +590,7 @@ def runNotebook(dataId,
                 extraInputCollections=None,
                 taskConfigs={},
                 configOptions={},
-                embargo=False):
+                repo="embargo_old"):
     """Run the ProcessStar pipeline for a single dataId, writing to the
     specified output collection.
 
@@ -615,8 +615,8 @@ def runNotebook(dataId,
         ``configOptions`` dict is the relevant task label. The value
         of ``configOptions`` is another dict that contains config
         key/value overrides to apply.
-    embargo : `bool`, optional
-        Use the embargo repo?
+    repo : `str`, optional
+        the embargo repo
 
     Returns
     -------
@@ -636,7 +636,6 @@ def runNotebook(dataId,
                        "instrument='LATISS'")
 
         return queryString
-    repo = "LATISS" if not embargo else "/repo/embargo_old"
 
     # TODO: use LATISS_DEFAULT_COLLECTIONS here?
     inputs = ['LATISS/raw/all', 'refcats', 'LATISS/calib']
@@ -644,6 +643,8 @@ def runNotebook(dataId,
         extraInputCollections = ensure_iterable(extraInputCollections)
         inputs.extend(extraInputCollections)
 
+    #import lsst.summit.utils.butlerUtils as butlerUtils
+    #butler = butlerUtils.makeDefaultButler("LATISS")
     butler = dafButler.Butler(repo, instrument='LATISS', writeable=True, collections=inputs)
 
     butler.registry.registerCollection(outputCollection, dafButler.CollectionType.CHAINED)
