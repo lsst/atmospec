@@ -77,7 +77,7 @@ def getPTCGainDict(butler):
     :param butler:
     :return:
     """
-    ptc = butler.get('ptc', instrument="LATISS", detector=0, collections='u/cslage/sdf/latiss/ptc_20220927J')
+    ptc = butler.get("ptc", detector=0, collections=["LATISS/calib"])
     ptcGainDict = ptc.gain
     return ptcGainDict
 
