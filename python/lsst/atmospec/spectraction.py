@@ -468,11 +468,12 @@ class SpectractorShim:
         # Subtract background and bad pixels
         w_psf1d, bgd_model_func = extract_spectrum_from_image(image, spectrum,
                                                               signal_width=parameters.PIXWIDTH_SIGNAL,
-                                                              ws=(parameters.PIXDIST_BACKGROUND,
+                                                              ws=[parameters.PIXDIST_BACKGROUND,
                                                                   parameters.PIXDIST_BACKGROUND
-                                                                  + parameters.PIXWIDTH_BACKGROUND),
-                                                              right_edge=image.data.shape[1])
+                                                                  + parameters.PIXWIDTH_BACKGROUND])
         spectrum.atmospheric_lines = atmospheric_lines
+        if plotting:
+            spectrum.plot_spectrum()
 
         # PSF2D deconvolution
         if parameters.SPECTRACTOR_DECONVOLUTION_PSF2D:
@@ -489,8 +490,8 @@ class SpectractorShim:
 
         # not necessarily set during fit but required to be present for astropy
         # fits writing to work (required to be in keeping with upstream)
-        spectrum.data_order2 = np.zeros_like(spectrum.lambdas)
-        spectrum.err_order2 = np.zeros_like(spectrum.lambdas)
+        spectrum.data_next_order = np.zeros_like(spectrum.lambdas)
+        spectrum.err_next_order = np.zeros_like(spectrum.lambdas)
 
         # Full forward model extraction:
         # adds transverse ADR and order 2 subtraction
