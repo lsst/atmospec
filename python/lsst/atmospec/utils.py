@@ -590,7 +590,7 @@ def runNotebook(dataId,
                 extraInputCollections=None,
                 taskConfigs={},
                 configOptions={},
-                embargo=False):
+                repo="LATISS"):
     """Run the ProcessStar pipeline for a single dataId, writing to the
     specified output collection.
 
@@ -615,8 +615,8 @@ def runNotebook(dataId,
         ``configOptions`` dict is the relevant task label. The value
         of ``configOptions`` is another dict that contains config
         key/value overrides to apply.
-    embargo : `bool`, optional
-        Use the embargo repo?
+    repo : `str`, optional
+        the data repo
 
     Returns
     -------
@@ -636,10 +636,9 @@ def runNotebook(dataId,
                        "instrument='LATISS'")
 
         return queryString
-    repo = "LATISS" if not embargo else "/repo/embargo"
 
     # TODO: use LATISS_DEFAULT_COLLECTIONS here?
-    inputs = ['LATISS/raw/all', 'refcats', 'LATISS/calib']
+    inputs = ['LATISS/raw/all', 'refcats', 'LATISS/calib', 'LATISS/calib/legacy']
     if extraInputCollections is not None:
         extraInputCollections = ensure_iterable(extraInputCollections)
         inputs.extend(extraInputCollections)
