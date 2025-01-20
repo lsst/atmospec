@@ -218,7 +218,7 @@ class SpectractorShim:
         image.gain = self._setGainFromExp(image, exp, 1./1.3)  # gain required for calculating stat err
         self._setStatErrorInImage(image, exp, useExpVariance=False)
         self._setMask(image, exp)
-        image.flat = None
+        image.flat = None  # TODO: use here recent DM ticket on spectro flats
 
         self._setImageAndHeaderInfo(image, exp)  # sets image attributes
 

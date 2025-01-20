@@ -679,5 +679,5 @@ def runNotebook(dataId,
     executor.run_pipeline(quantumGraph, fail_fast=True)
 
     butler.registry.refresh()
-    result = butler.get('spectractorSpectrum', dataId)
+    result = butler.get('spectractorSpectrum', dataId, instrument='LATISS')
     return result
