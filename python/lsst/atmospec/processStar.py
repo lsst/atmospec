@@ -218,7 +218,7 @@ class ProcessStarTaskConfig(pipeBase.PipelineTaskConfig,
         dtype=float,
         doc="Prior on the reliability of the centroid estimate in pixels. "
         "PIXSHIFT_PRIOR internally.",
-        default=5,
+        default=2,
         check=lambda x: x > 0,
     )
     doFilterRotatedImage = pexConfig.Field(
@@ -887,7 +887,7 @@ class ProcessStarTask(pipeBase.PipelineTask):
             'OBS_SURFACE': 9636,
             'PAPER': False,
             'SAVE': False,
-            'DISTANCE2CCD_ERR': 0.4,
+            'DISTANCE2CCD_ERR': 0.05,
 
             # Parameters set programatically
             'LAMBDAS': np.arange(self.config.lambdaMin,
