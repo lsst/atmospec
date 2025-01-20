@@ -304,6 +304,8 @@ class ProcessStarTaskConfig(pipeBase.PipelineTaskConfig,
             -1: "The first order spectrum in the negative y direction",
             2: "The second order spectrum in the positive y direction",
             -2: "The second order spectrum in the negative y direction",
+            3: "The third order spectrum in the positive y direction",
+            -3: "The third order spectrum in the negative y direction",
         }
     )
     signalWidth = pexConfig.Field(  # TODO: change this to be set wrt the focus/seeing, i.e. FWHM from imChar
@@ -342,8 +344,10 @@ class ProcessStarTaskConfig(pipeBase.PipelineTaskConfig,
         "PSF_TYPE internally.",
         default="Moffat",
         allowed={
+            "Gauss": "A Gauss function",
             "Moffat": "A Moffat function",
-            "MoffatGauss": "A Moffat plus a Gaussian"
+            "MoffatGauss": "A Moffat plus a Gaussian",
+            "DoubleMoffat": "A Double Moffat function"
         }
     )
     psfPolynomialOrder = pexConfig.Field(
@@ -507,13 +511,18 @@ class ProcessStarTaskConfig(pipeBase.PipelineTaskConfig,
     def validate(self):
         super().validate()
         uvspecPath = shutil.which('uvspec')
-        if uvspecPath is None and self.doFitAtmosphere is True:
-            raise FieldValidationError(self.__class__.doFitAtmosphere, self, "uvspec is not in the path,"
+        try:
+            import getObsAtmo
+        except ModuleNotFoundError:
+            getObsAtmo = None
+        if uvspecPath is None and getObsAtmo is None and self.doFitAtmosphere is True:
+            raise FieldValidationError(self.__class__.doFitAtmosphere, self,
+                                       "uvspec is not in the path nor getObsAtmo is instaled,"
                                        " but doFitAtmosphere is True.")
-        if uvspecPath is None and self.doFitAtmosphereOnSpectrogram is True:
-            raise FieldValidationError(self.__class__.doFitAtmosphereOnSpectrogram, self, "uvspec is not in"
+        if uvspecPath is None and getObsAtmo is None and self.doFitAtmosphereOnSpectrogram is True:
+            raise FieldValidationError(self.__class__.doFitAtmosphereOnSpectrogram, self,
+                                       "uvspec is not in the path nor getObsAtmo is installed,"
                                        " the path, but doFitAtmosphere is True.")
-
 
 class ProcessStarTask(pipeBase.PipelineTask):
     """Task for the spectral extraction of single-star dispersed images.
