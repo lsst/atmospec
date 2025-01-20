@@ -44,6 +44,7 @@ from spectractor.fit.fit_spectrogram import (SpectrogramFitWorkspace,  # noqa: E
 
 from lsst.daf.base import DateTime  # noqa: E402
 from .utils import getFilterAndDisperserFromExp  # noqa: E402
+from .spectroFlat import getPTCGainDict, makeSensorFlat, getCertifiedFlat, makeGainFlat   # noqa: E402
 
 
 class SpectractorShim:
@@ -213,11 +214,17 @@ class SpectractorShim:
         if parameters.DEBUG:
             self.debugPrintTargetCentroidValue(image)
 
-        self._setReadNoiseFromExp(image, exp, 1)
+        self._setReadNoiseFromExp(image, exp, 8.5)
         # xxx remove hard coding of 1 below!
-        image.gain = self._setGainFromExp(image, exp, .85)  # gain required for calculating stat err
+        import lsst.daf.butler as dafButler
+        butler = dafButler.Butler("/repo/embargo_old", collections=['LATISS/calib', 'LATISS/raw/all'])
+        ptcGainDict = getPTCGainDict(butler)
+        certifiedFlat = getCertifiedFlat(butler, dataId=exp.visitInfo.id, filter="empty")
+        image.gain = self._transformArrayFromExpToImage(makeGainFlat(certifiedFlat, ptcGainDict).image.array)
         self._setStatErrorInImage(image, exp, useExpVariance=False)
-        # image.coord as an astropy SkyCoord - currently unused
+        self._setMask(image, exp)
+        sensorFlat = makeSensorFlat(certifiedFlat, ptcGainDict, kernel="mean", invertGains=True)
+        image.flat = self._transformArrayFromExpToImage(sensorFlat.image.array)
 
         self._setImageAndHeaderInfo(image, exp)  # sets image attributes
 
@@ -264,6 +271,16 @@ class SpectractorShim:
             self.log.warn("Failed to set AIRMASS, default value of 1 used")
             image.header.airmass = 1.
 
+        # get supplementary metadata
+        md = exp.getMetadata().toDict()
+        image.header['DOMEAZ'] = md['DOMEAZ']
+        image.header['AZ'] = md['AZSTART']
+        image.header['EL'] = md['ELSTART']
+        image.header['RA'] = md['RA']
+        image.header['MJD'] = md['MJD']
+        image.header['WINDSPD'] = md['WINDSPD']
+        image.header['WINDDIR'] = md['WINDDIR']
+
         return
 
     def _getImageData(self, exp, trimToSquare=False):
@@ -271,7 +288,12 @@ class SpectractorShim:
             data = exp.image.array[0:4000, 0:4000]
         else:
             data = exp.image.array
-        return data.T[::, ::]
+        return self._transformArrayFromExpToImage(data)
+
+    def _transformArrayFromExpToImage(self, array):
+        # apply transformation on an exposure array to have correct orientation
+        # in Spectractor Image
+        return array.T[::, ::]
 
     def _setReadNoiseFromExp(self, spectractorImage, exp, constValue=None):
         # xxx need to implement this properly
@@ -281,15 +303,35 @@ class SpectractorShim:
             # TODO: Check with Jeremy if we want the raw read noise
             # or the per-pixel variance. Either is doable, just need to know.
             raise NotImplementedError("Setting noise image from exp variance not implemented")
+            raw = butler.get('raw', instrument='LATISS', exposure=dataId, detector=0,
+                             collections=['LATISS/calib', 'LATISS/raw/all'])
+            det = raw.getDetector()
+            raw_image = raw.getImage()
+            spectractorImage.read_out_noise = np.zeros_like(spectractorImage.data)
+            for amp in det:
+                ampData = raw_image[amp.getRawSerialOverscanBBox()].array
+                noise_over_serial_fliped = ampData[:, :-2].std(axis=0).mean()
+                bbox = amp.getBBox()
+                spectractorImage.read_out_noise[bbox] = noise_over_serial_fliped
+                print('amp name=', amp.getName(),
+                      ' header noise ? =', amp.getReadNoise(),
+                      'header gain ? =', amp.getGain(),
+                      '(flip =', noise_over_serial_fliped, ')')
 
     def _setReadNoiseToNone(self, spectractorImage):
         spectractorImage.read_out_noise = None
 
     def _setStatErrorInImage(self, image, exp, useExpVariance=False):
         if useExpVariance:
-            image.stat_errors = exp.maskedImage.variance.array  # xxx need to deal with TRANSPOSE here
+            image.err = self._transformArrayFromExpToImage(np.sqrt(exp.getVariance().array))
         else:
             image.compute_statistical_error()
+
+    def _setMask(self, image, exp):
+        badBit = exp.getMask().getPlaneBitMask("BAD")
+        crBit = exp.getMask().getPlaneBitMask("CR")
+        badPixels = np.logical_or((exp.getMask().array & badBit) > 0, (exp.getMask().array & crBit) > 0)
+        image.mask = self._transformArrayFromExpToImage(badPixels)
 
     def _setGainFromExp(self, spectractorImage, exp, constValue=None):
         # xxx need to implement this properly
@@ -448,9 +490,10 @@ class SpectractorShim:
                                                               signal_width=parameters.PIXWIDTH_SIGNAL,
                                                               ws=(parameters.PIXDIST_BACKGROUND,
                                                                   parameters.PIXDIST_BACKGROUND
-                                                                  + parameters.PIXWIDTH_BACKGROUND),
-                                                              right_edge=image.data.shape[1])
+                                                                  + parameters.PIXWIDTH_BACKGROUND))
         spectrum.atmospheric_lines = atmospheric_lines
+        if plotting:
+            spectrum.plot_spectrum()
 
         # PSF2D deconvolution
         if parameters.SPECTRACTOR_DECONVOLUTION_PSF2D:
@@ -467,8 +510,8 @@ class SpectractorShim:
 
         # not necessarily set during fit but required to be present for astropy
         # fits writing to work (required to be in keeping with upstream)
-        spectrum.data_order2 = np.zeros_like(spectrum.lambdas)
-        spectrum.err_order2 = np.zeros_like(spectrum.lambdas)
+        spectrum.data_next_order = np.zeros_like(spectrum.lambdas)
+        spectrum.err_next_order = np.zeros_like(spectrum.lambdas)
 
         # Full forward model extraction:
         # adds transverse ADR and order 2 subtraction
