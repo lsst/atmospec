@@ -59,6 +59,14 @@ import astropy.units as u
 from astropy.coordinates import SkyCoord, Distance
 
 
+def getGainDict(exposure):
+    det = exposure.getDetector()
+    gainDict = {}
+    for amp in det:
+        gainDict[amp.getName()] = amp.getGain()
+    return gainDict
+
+
 def makeGainFlat(exposure, gainDict, invertGains=False):
     """Given an exposure, make a flat from the gains.
 
@@ -546,10 +554,10 @@ def getLinearStagePosition(exp):
         The position of the linear stage, in mm.
     """
     md = exp.getMetadata()
-    linearStagePosition = 115  # this seems to be the rough zero-point for some reason
+    linearStagePosition = 116.1  # this seems to be the rough zero-point for some reason
     if 'LINSPOS' in md:
         position = md['LINSPOS']  # linear stage position in mm from CCD, larger->further from CCD
-        if position is not None:
+        if position is not None and position > 0:  # if negative, there is an issue with the linear stage:
             linearStagePosition += position
     return linearStagePosition
 
