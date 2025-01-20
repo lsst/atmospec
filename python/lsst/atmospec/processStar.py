@@ -914,6 +914,8 @@ class ProcessStarTask(pipeBase.PipelineTask):
             # spectractor handles this, so while it's quite ugly, do this to
             # keep the behaviour the same for now.
             linearStagePosition += 4  # hologram is sealed with a 4 mm window
+        if grating == 'blue300lpmm_qn1':
+            linearStagePosition += 3.4  # hologram is sealed with a 4 mm window
         overrideDict['DISTANCE2CCD'] = linearStagePosition
 
         target = inputExp.visitInfo.object
