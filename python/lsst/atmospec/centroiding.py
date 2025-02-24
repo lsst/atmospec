@@ -53,7 +53,7 @@ class SingleStarCentroidTaskConnections(pipeBase.PipelineTaskConnections,
     )
     astromRefCat = cT.PrerequisiteInput(
         doc="Reference catalog to use for astrometry",
-        name="the_monster_20240904",
+        name="the_monster_20250219",
         storageClass="SimpleCatalog",
         dimensions=("skypix",),
         deferLoad=True,
