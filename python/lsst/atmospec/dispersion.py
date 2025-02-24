@@ -53,7 +53,7 @@ class DispersionRelation:
 
     def _calcCoefficients(self):
         if (self.observedLines is None) or (self.spectralLines is None):
-            self.log.warn('Missing input for _calcCoefficients, default transformation: 1 to 1 ')
+            self.log.warning('Missing input for _calcCoefficients, default transformation: 1 to 1 ')
             self.observedLines = [1, 2]
             self.spectralLines = [1, 2]
         pix2wlCoeffs = np.polyfit(self.observedLines, self.spectralLines, deg=1)

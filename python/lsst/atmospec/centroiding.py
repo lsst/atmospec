@@ -185,7 +185,7 @@ class SingleStarCentroidTask(pipeBase.PipelineTask):
 
             # AttributeError: 'NoneType' object has no attribute 'asArcseconds'
             # when the result is a failure as the wcs is set to None on failure
-            self.log.warn(f"Solving failed: {e}")
+            self.log.warning(f"Solving failed: {e}")
             inputExp.setWcs(originalWcs)  # this is set to None when the fit fails, so restore it
         finally:
             inputExp.setFilter(originalFilterLabel)  # always restore this
