@@ -490,11 +490,7 @@ class SpectractorShim:
                                                               signal_width=parameters.PIXWIDTH_SIGNAL,
                                                               ws=[parameters.PIXDIST_BACKGROUND,
                                                                   parameters.PIXDIST_BACKGROUND
-<<<<<<< HEAD
-                                                                  + parameters.PIXWIDTH_BACKGROUND))
-=======
                                                                   + parameters.PIXWIDTH_BACKGROUND])
->>>>>>> d1e9f86c1bfcf38fe1da7aed8af5d29458fa4127
         spectrum.atmospheric_lines = atmospheric_lines
         if plotting:
             spectrum.plot_spectrum()
