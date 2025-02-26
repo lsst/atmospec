@@ -217,7 +217,7 @@ class SpectractorShim:
         self._setReadNoiseFromExp(image, exp, 8.5)
         # xxx remove hard coding of 1 below!
         import lsst.daf.butler as dafButler
-        butler = dafButler.Butler("/repo/embargo_old", collections=['LATISS/calib', 'LATISS/raw/all'])
+        butler = dafButler.Butler("/repo/embargo_old", collections=['LATISS/calib', 'LATISS/raw/all', 'LATISS/calib/legacy'])
         ptcGainDict = getPTCGainDict(butler)
         certifiedFlat = getCertifiedFlat(butler, dataId=exp.visitInfo.id, filter="empty")
         image.gain = self._transformArrayFromExpToImage(makeGainFlat(certifiedFlat, ptcGainDict).image.array)
@@ -543,6 +543,7 @@ class SpectractorShim:
 
         # Save the spectrum
         self._ensureFitsHeader(spectrum)  # SIMPLE is missing by default
+        self._ensureFitsHeader(image)  # SIMPLE is missing by default
 
         # Plot the spectrum
         parameters.DISPLAY = True
