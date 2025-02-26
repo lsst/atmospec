@@ -218,7 +218,7 @@ class ProcessStarTaskConfig(pipeBase.PipelineTaskConfig,
         dtype=float,
         doc="Prior on the reliability of the centroid estimate in pixels. "
         "PIXSHIFT_PRIOR internally.",
-        default=5,
+        default=2,
         check=lambda x: x > 0,
     )
     doFilterRotatedImage = pexConfig.Field(
@@ -526,7 +526,6 @@ class ProcessStarTaskConfig(pipeBase.PipelineTaskConfig,
                                        "uvspec is not in the path nor getObsAtmo is installed,"
                                        " the path, but doFitAtmosphere is True.")
 
-
 class ProcessStarTask(pipeBase.PipelineTask):
     """Task for the spectral extraction of single-star dispersed images.
 
@@ -563,7 +562,7 @@ class ProcessStarTask(pipeBase.PipelineTask):
                     afwDisp.setDefaultMaskTransparency(90)
                 except NameError:
                     self.debug.display = False
-                    self.log.warn('Failed to setup/connect to display! Debug display has been disabled')
+                    self.log.warning('Failed to setup/connect to display! Debug display has been disabled')
 
         if self.debug.notHeadless:
             pass  # other backend options can go here
@@ -888,7 +887,7 @@ class ProcessStarTask(pipeBase.PipelineTask):
             'OBS_SURFACE': 9636,
             'PAPER': False,
             'SAVE': False,
-            'DISTANCE2CCD_ERR': 0.4,
+            'DISTANCE2CCD_ERR': 0.05,
 
             # Parameters set programatically
             'LAMBDAS': np.arange(self.config.lambdaMin,
@@ -917,6 +916,8 @@ class ProcessStarTask(pipeBase.PipelineTask):
             # spectractor handles this, so while it's quite ugly, do this to
             # keep the behaviour the same for now.
             linearStagePosition += 4  # hologram is sealed with a 4 mm window
+        if grating == 'blue300lpmm_qn1':
+            linearStagePosition += 3.4  # hologram is sealed with a 4 mm window
         overrideDict['DISTANCE2CCD'] = linearStagePosition
 
         target = inputExp.visitInfo.object
@@ -986,7 +987,7 @@ class ProcessStarTask(pipeBase.PipelineTask):
             astromResult = solver.run(sourceCat=icSrc, exposure=exp)
             exp.setFilter(originalFilterLabel)
         except (RuntimeError, TaskError):
-            self.log.warn("Solver failed to run completely")
+            self.log.warning("Solver failed to run completely")
             exp.setFilter(originalFilterLabel)
             return None
 
@@ -994,7 +995,7 @@ class ProcessStarTask(pipeBase.PipelineTask):
         if scatter < 1:
             return astromResult
         else:
-            self.log.warn("Failed to find an acceptable match")
+            self.log.warning("Failed to find an acceptable match")
         return None
 
     def pause(self):
@@ -1028,11 +1029,11 @@ class ProcessStarTask(pipeBase.PipelineTask):
         Will probably need a dataRef, as it will need to be retrieving flats
         over a range. Also, it will be somewhat complex, so probably needs
         moving to its own task"""
-        self.log.warn("Flatfielding not yet implemented")
+        self.log.warning("Flatfielding not yet implemented")
         return exp
 
     def repairCosmics(self, exp, disp):
-        self.log.warn("Cosmic ray repair not yet implemented")
+        self.log.warning("Cosmic ray repair not yet implemented")
         return exp
 
     def measureSpectrum(self, exp, sourceCentroid, spectrumBBox, dispersionRelation):

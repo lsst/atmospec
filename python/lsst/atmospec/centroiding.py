@@ -53,7 +53,7 @@ class SingleStarCentroidTaskConnections(pipeBase.PipelineTaskConnections,
     )
     astromRefCat = cT.PrerequisiteInput(
         doc="Reference catalog to use for astrometry",
-        name="the_monster_20240904",
+        name="the_monster_20250219",
         storageClass="SimpleCatalog",
         dimensions=("skypix",),
         deferLoad=True,
@@ -104,6 +104,15 @@ class SingleStarCentroidTaskConfig(pipeBase.PipelineTaskConfig,
         self.astrometry.sourceSelector['matcher'].minSnr = 10
         self.astrometry.sourceSelector["science"].doRequirePrimary = False
         self.astrometry.sourceSelector["science"].doIsolated = False
+
+    def validate(self):
+        super().validate()
+        task = self.centroidingFallbackTask
+        # note these aren't instantiated yet, so we can't check the type
+        # of the instance, just the target. _DefaultName is a class attribute
+        # that definitely exists, but has a lower case first letter.
+        if task.target._DefaultName not in ('quickFrameMeasurementTask', 'peekExposureTask'):
+            raise ValueError(f"centroidingFallbackTask is of unknown type {task.target}")
 
 
 class SingleStarCentroidTask(pipeBase.PipelineTask):
@@ -176,7 +185,7 @@ class SingleStarCentroidTask(pipeBase.PipelineTask):
 
             # AttributeError: 'NoneType' object has no attribute 'asArcseconds'
             # when the result is a failure as the wcs is set to None on failure
-            self.log.warn(f"Solving failed: {e}")
+            self.log.warning(f"Solving failed: {e}")
             inputExp.setWcs(originalWcs)  # this is set to None when the fit fails, so restore it
         finally:
             inputExp.setFilter(originalFilterLabel)  # always restore this

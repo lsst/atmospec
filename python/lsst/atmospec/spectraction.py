@@ -91,7 +91,7 @@ class SpectractorShim:
             if k in dir(parameters):
                 setattr(parameters, k, v)
             else:
-                self.log.warn("Did not find attribute %s in parameters" % k)
+                self.log.warning("Did not find attribute %s in parameters" % k)
                 raise RuntimeError(f"{k} not set to {v} {self.dumpParameters()}")
 
     def supplementParameters(self, supplementaryItems):
@@ -114,7 +114,7 @@ class SpectractorShim:
             if k in dir(parameters):
                 msg = ("Supplementary parameter already existed %s in parameters,"
                        " use overrideParameters() to override already existing keys instead.")
-                self.log.warn(msg, k)
+                self.log.warning(msg, k)
             else:
                 setattr(parameters, k, v)
 
@@ -268,7 +268,7 @@ class SpectractorShim:
                 image.airmass = md['AIRMASS']
                 image.date_obs = md['DATE']
         except Exception:
-            self.log.warn("Failed to set AIRMASS, default value of 1 used")
+            self.log.warning("Failed to set AIRMASS, default value of 1 used")
             image.header.airmass = 1.
 
         # get supplementary metadata
@@ -488,9 +488,13 @@ class SpectractorShim:
         # Subtract background and bad pixels
         w_psf1d, bgd_model_func = extract_spectrum_from_image(image, spectrum,
                                                               signal_width=parameters.PIXWIDTH_SIGNAL,
-                                                              ws=(parameters.PIXDIST_BACKGROUND,
+                                                              ws=[parameters.PIXDIST_BACKGROUND,
                                                                   parameters.PIXDIST_BACKGROUND
+<<<<<<< HEAD
                                                                   + parameters.PIXWIDTH_BACKGROUND))
+=======
+                                                                  + parameters.PIXWIDTH_BACKGROUND])
+>>>>>>> d1e9f86c1bfcf38fe1da7aed8af5d29458fa4127
         spectrum.atmospheric_lines = atmospheric_lines
         if plotting:
             spectrum.plot_spectrum()
@@ -543,7 +547,11 @@ class SpectractorShim:
 
         # Save the spectrum
         self._ensureFitsHeader(spectrum)  # SIMPLE is missing by default
+<<<<<<< HEAD
         self._ensureFitsHeader(image)  # SIMPLE is missing by default
+=======
+        self._ensureFitsHeader(image)  # SIMPLE is missing by default  # TODO: debug this
+>>>>>>> d1e9f86c1bfcf38fe1da7aed8af5d29458fa4127
 
         # Plot the spectrum
         parameters.DISPLAY = True

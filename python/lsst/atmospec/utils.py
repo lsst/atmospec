@@ -557,7 +557,7 @@ def getLinearStagePosition(exp):
     linearStagePosition = 116.1  # this seems to be the rough zero-point for some reason
     if 'LINSPOS' in md:
         position = md['LINSPOS']  # linear stage position in mm from CCD, larger->further from CCD
-        if position is not None:
+        if position is not None and position > 0:  # if negative, there is an issue with the linear stage:
             linearStagePosition += position
     return linearStagePosition
 
@@ -590,7 +590,7 @@ def runNotebook(dataId,
                 extraInputCollections=None,
                 taskConfigs={},
                 configOptions={},
-                repo="embargo_old"):
+                repo="LATISS"):
     """Run the ProcessStar pipeline for a single dataId, writing to the
     specified output collection.
 
@@ -616,7 +616,7 @@ def runNotebook(dataId,
         of ``configOptions`` is another dict that contains config
         key/value overrides to apply.
     repo : `str`, optional
-        the embargo repo
+        the data repo
 
     Returns
     -------
@@ -638,7 +638,7 @@ def runNotebook(dataId,
         return queryString
 
     # TODO: use LATISS_DEFAULT_COLLECTIONS here?
-    inputs = ['LATISS/raw/all', 'refcats', 'LATISS/calib']
+    inputs = ['LATISS/raw/all', 'refcats', 'LATISS/calib', 'LATISS/calib/legacy']
     if extraInputCollections is not None:
         extraInputCollections = ensure_iterable(extraInputCollections)
         inputs.extend(extraInputCollections)
@@ -649,7 +649,7 @@ def runNotebook(dataId,
 
     butler.registry.registerCollection(outputCollection, dafButler.CollectionType.CHAINED)
     run = outputCollection + '/run'
-    butler.registry.defaults = RegistryDefaults(collections=outputCollection, run=run)
+    butler.registry.defaults = RegistryDefaults(collections=outputCollection, run=run, instrument='LATISS')
     butler.registry.setCollectionChain(outputCollection, [run] + inputs)
     pipeline = Pipeline.fromFile("${ATMOSPEC_DIR}/pipelines/processStar.yaml")
 
