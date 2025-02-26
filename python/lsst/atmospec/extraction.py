@@ -147,7 +147,7 @@ class SpectralExtractionTask(pipeBase.Task):
                 self.disp1.mtv(self.expRaw[self.spectrumBbox])
                 self.disp1.erase()
             except Exception:
-                self.log.warn('Failed to initialise debug display')
+                self.log.warning('Failed to initialise debug display')
                 self.debug.display = False
 
         # xxx probably need to change this once per-spectrum background is done
@@ -167,8 +167,8 @@ class SpectralExtractionTask(pipeBase.Task):
 
         assert nbins > 0
         if nbins > maskedImage.getHeight() - 1:
-            self.log.warn("More bins selected for background than pixels in image height."
-                          + f" Reducing numbers of bins from {nbins} to {maskedImage.getHeight()-1}.")
+            self.log.warning("More bins selected for background than pixels in image height."
+                             + f" Reducing numbers of bins from {nbins} to {maskedImage.getHeight()-1}.")
             nbins = maskedImage.getHeight() - 1
 
         nx = 1
@@ -243,7 +243,7 @@ class SpectralExtractionTask(pipeBase.Task):
         psfSigma = np.std(footprintArray[0])
         psfMu = np.argmax(footprintArray[0])
         if abs(psfMu - self.spectrumWidth/2.) >= 10:
-            self.log.warn('initial mu more than 10 pixels from footprint center')
+            self.log.warning('initial mu more than 10 pixels from footprint center')
 
         # loop over the rows, calculating basic parameters
         for rowNum in range(self.spectrumHeight):  # take row slices
@@ -265,11 +265,11 @@ class SpectralExtractionTask(pipeBase.Task):
                 if ((psfMu > .7*self.spectrumWidth) or (psfMu < 0.3*self.spectrumWidth)):
                     # psfMu = width/2.  # Augustin's method
                     psfMu = np.argmax(footprintSlice)
-                    self.log.warn(f'psfMu was running away on row {rowNum} - reset to nominal')
+                    self.log.warning(f'psfMu was running away on row {rowNum} - reset to nominal')
                 if ((psfSigma > 20.) or (psfSigma < 0.1)):
                     # psfSigma = 3.  # Augustin's method
                     psfSigma = np.std(footprintSlice)
-                    self.log.warn(f'psfSigma was running away on row {rowNum} - reset to nominal')
+                    self.log.warning(f'psfSigma was running away on row {rowNum} - reset to nominal')
 
             initialPars = [psfAmp, psfMu, psfSigma]  # use value from previous iteration
 
@@ -283,13 +283,13 @@ class SpectralExtractionTask(pipeBase.Task):
                 self.psfFitPars[rowNum] = (psfAmp, psfMu, psfSigma, psfFlux)
 
             except (RuntimeError, ValueError) as e:
-                self.log.warn(f'\nRuntimeError for basic 1D Gauss fit! rowNum = {rowNum}\n{e}')
+                self.log.warning(f'\nRuntimeError for basic 1D Gauss fit! rowNum = {rowNum}\n{e}')
 
             try:
                 fitValsMoffat = self.moffatFit(pixels, footprintSlice, psfAmp, psfMu, psfSigma)
                 self.moffatFitPars[rowNum] = fitValsMoffat
             except (RuntimeError, ValueError) as e:
-                self.log.warn(f'\n\nRuntimeError during Moffat fit! rowNum = {rowNum}\n{e}')
+                self.log.warning(f'\n\nRuntimeError during Moffat fit! rowNum = {rowNum}\n{e}')
 
             try:
                 if rowNum == 0:  # bootstrapping, hence all the noqa: F821
@@ -323,7 +323,7 @@ class SpectralExtractionTask(pipeBase.Task):
 
             except (RuntimeError, ValueError) as e:
                 msg = f'\n\nRuntimeError during GaussMoffatFit fit! rowNum = {rowNum}\n{e}'
-                self.log.warn(msg)  # serious, and should never happen
+                self.log.warning(msg)  # serious, and should never happen
                 # self.gausMoffatFitPars.append(fitValsGM)
 
             '''Filling in the residuals'''
@@ -352,7 +352,7 @@ class SpectralExtractionTask(pipeBase.Task):
         # maxRow = argMaxNd(footprintArray)[0]
 
         if self.config.writeResiduals:
-            self.log.warn('Not implemented yet')
+            self.log.warning('Not implemented yet')
 
         return self
 

@@ -562,7 +562,7 @@ class ProcessStarTask(pipeBase.PipelineTask):
                     afwDisp.setDefaultMaskTransparency(90)
                 except NameError:
                     self.debug.display = False
-                    self.log.warn('Failed to setup/connect to display! Debug display has been disabled')
+                    self.log.warning('Failed to setup/connect to display! Debug display has been disabled')
 
         if self.debug.notHeadless:
             pass  # other backend options can go here
@@ -987,7 +987,7 @@ class ProcessStarTask(pipeBase.PipelineTask):
             astromResult = solver.run(sourceCat=icSrc, exposure=exp)
             exp.setFilter(originalFilterLabel)
         except (RuntimeError, TaskError):
-            self.log.warn("Solver failed to run completely")
+            self.log.warning("Solver failed to run completely")
             exp.setFilter(originalFilterLabel)
             return None
 
@@ -995,7 +995,7 @@ class ProcessStarTask(pipeBase.PipelineTask):
         if scatter < 1:
             return astromResult
         else:
-            self.log.warn("Failed to find an acceptable match")
+            self.log.warning("Failed to find an acceptable match")
         return None
 
     def pause(self):
@@ -1029,11 +1029,11 @@ class ProcessStarTask(pipeBase.PipelineTask):
         Will probably need a dataRef, as it will need to be retrieving flats
         over a range. Also, it will be somewhat complex, so probably needs
         moving to its own task"""
-        self.log.warn("Flatfielding not yet implemented")
+        self.log.warning("Flatfielding not yet implemented")
         return exp
 
     def repairCosmics(self, exp, disp):
-        self.log.warn("Cosmic ray repair not yet implemented")
+        self.log.warning("Cosmic ray repair not yet implemented")
         return exp
 
     def measureSpectrum(self, exp, sourceCentroid, spectrumBBox, dispersionRelation):

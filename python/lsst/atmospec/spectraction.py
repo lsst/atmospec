@@ -90,7 +90,7 @@ class SpectractorShim:
             if k in dir(parameters):
                 setattr(parameters, k, v)
             else:
-                self.log.warn("Did not find attribute %s in parameters" % k)
+                self.log.warning("Did not find attribute %s in parameters" % k)
                 raise RuntimeError(f"{k} not set to {v} {self.dumpParameters()}")
 
     def supplementParameters(self, supplementaryItems):
@@ -113,7 +113,7 @@ class SpectractorShim:
             if k in dir(parameters):
                 msg = ("Supplementary parameter already existed %s in parameters,"
                        " use overrideParameters() to override already existing keys instead.")
-                self.log.warn(msg, k)
+                self.log.warning(msg, k)
             else:
                 setattr(parameters, k, v)
 
@@ -262,7 +262,7 @@ class SpectractorShim:
                 image.airmass = md['AIRMASS']
                 image.date_obs = md['DATE']
         except Exception:
-            self.log.warn("Failed to set AIRMASS, default value of 1 used")
+            self.log.warning("Failed to set AIRMASS, default value of 1 used")
             image.header.airmass = 1.
 
         # get supplementary metadata
