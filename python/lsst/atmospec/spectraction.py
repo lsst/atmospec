@@ -543,11 +543,7 @@ class SpectractorShim:
 
         # Save the spectrum
         self._ensureFitsHeader(spectrum)  # SIMPLE is missing by default
-<<<<<<< HEAD
-        self._ensureFitsHeader(image)  # SIMPLE is missing by default
-=======
         self._ensureFitsHeader(image)  # SIMPLE is missing by default  # TODO: debug this
->>>>>>> d1e9f86c1bfcf38fe1da7aed8af5d29458fa4127
 
         # Plot the spectrum
         parameters.DISPLAY = True
