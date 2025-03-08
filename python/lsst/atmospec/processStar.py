@@ -524,6 +524,7 @@ class ProcessStarTaskConfig(pipeBase.PipelineTaskConfig,
                                        "uvspec is not in the path nor getObsAtmo is installed,"
                                        " the path, but doFitAtmosphere is True.")
 
+
 class ProcessStarTask(pipeBase.PipelineTask):
     """Task for the spectral extraction of single-star dispersed images.
 
