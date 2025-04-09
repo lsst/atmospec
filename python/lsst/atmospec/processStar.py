@@ -29,7 +29,7 @@ import matplotlib.pyplot as plt
 import lsstDebug
 import lsst.afw.image as afwImage
 import lsst.geom as geom
-from lsst.ip.isr import IsrTask
+from lsst.ip.isr import IsrTaskLSST
 import lsst.pex.config as pexConfig
 from lsst.pex.config import FieldValidationError
 import lsst.pipe.base as pipeBase
@@ -425,7 +425,7 @@ class ProcessStarTaskConfig(pipeBase.PipelineTaskConfig,
     )
     # ProcessStar own parameters
     isr = pexConfig.ConfigurableField(
-        target=IsrTask,
+        target=IsrTaskLSST,
         doc="Task to perform instrumental signature removal",
     )
     charImage = pexConfig.ConfigurableField(
@@ -493,7 +493,6 @@ class ProcessStarTaskConfig(pipeBase.PipelineTaskConfig,
     )
 
     def setDefaults(self):
-        self.isr.doWrite = False
         self.charImage.doWriteExposure = False
 
         self.charImage.doApCorr = False
@@ -504,7 +503,6 @@ class ProcessStarTaskConfig(pipeBase.PipelineTaskConfig,
             self.charImage.measurePsf.starSelector['objectSize'].signalToNoiseMin = 10.0
             self.charImage.measurePsf.starSelector['objectSize'].fluxMin = 5000.0
         self.charImage.detection.includeThresholdMultiplier = 3
-        self.isr.overscan.fitType = 'MEDIAN_PER_ROW'
 
     def validate(self):
         super().validate()
