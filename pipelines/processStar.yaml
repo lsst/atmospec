@@ -36,4 +36,5 @@ subsets:
   step1b-single-visit-visits:
       - characterizeImage
       - singleStarCentroid
-      - processStar
+      # - processStar
+      # - processStar
