@@ -31,6 +31,7 @@ subsets:
   step1:
     subset:
       - isr
+  step2a:
       - characterizeImage
       - singleStarCentroid
       - processStar
