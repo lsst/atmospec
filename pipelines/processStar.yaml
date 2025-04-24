@@ -28,10 +28,10 @@ tasks:
   singleStarCentroid: lsst.atmospec.centroiding.SingleStarCentroidTask
   processStar: lsst.atmospec.processStar.ProcessStarTask
 subsets:
-  step1:
+  step1a-single-visit-detectors:
     subset:
       - isr
-  step2a:
+  step1b-single-visit-visits:
       - characterizeImage
       - singleStarCentroid
       - processStar
