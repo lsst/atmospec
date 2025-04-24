@@ -22,7 +22,7 @@
 import lsst.afw.image as afwImage
 import lsst.pipe.base as pipeBase
 
-from lsst.meas.algorithms import LoadReferenceObjectsConfig, MagnitudeLimit, ReferenceObjectLoader
+from lsst.meas.algorithms import LoadReferenceObjectsConfig, ReferenceObjectLoader
 from lsst.meas.astrom import AstrometryTask, FitAffineWcsTask
 from lsst.pipe.tasks.quickFrameMeasurement import QuickFrameMeasurementTask
 from lsst.pipe.tasks.peekExposure import PeekExposureTask
@@ -93,15 +93,20 @@ class SingleStarCentroidTaskConfig(pipeBase.PipelineTaskConfig,
         self.astromRefObjLoader.pixelMargin = 1000
 
         self.astrometry.wcsFitter.retarget(FitAffineWcsTask)
+
+        # Use magnitude limits for the reference catalog
         self.astrometry.referenceSelector.doMagLimit = True
-        magLimit = MagnitudeLimit()
-        magLimit.minimum = 1
-        magLimit.maximum = 15
-        self.astrometry.referenceSelector.magLimit = magLimit
+        self.astrometry.referenceSelector.magLimit.minimum = 1
+        self.astrometry.referenceSelector.magLimit.maximum = 15
         self.astrometry.referenceSelector.magLimit.fluxField = "phot_g_mean_flux"
         self.astrometry.matcher.maxRotationDeg = 5.99
         self.astrometry.matcher.maxOffsetPix = 3000
-        self.astrometry.sourceSelector['matcher'].minSnr = 10
+
+        # Use a SNR limit for the science catalog
+        self.astrometry.sourceSelector["science"].doSignalToNoise = True
+        self.astrometry.sourceSelector["science"].signalToNoise.minimum = 10
+        self.astrometry.sourceSelector["science"].signalToNoise.fluxField = "slot_PsfFlux_instFlux"
+        self.astrometry.sourceSelector["science"].signalToNoise.errField = "slot_PsfFlux_instFluxErr"
         self.astrometry.sourceSelector["science"].doRequirePrimary = False
         self.astrometry.sourceSelector["science"].doIsolated = False
 
