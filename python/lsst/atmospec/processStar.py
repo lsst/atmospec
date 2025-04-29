@@ -29,7 +29,7 @@ import matplotlib.pyplot as plt
 import lsstDebug
 import lsst.afw.image as afwImage
 import lsst.geom as geom
-from lsst.ip.isr import IsrTask
+from lsst.ip.isr import IsrTaskLSST
 import lsst.pex.config as pexConfig
 from lsst.pex.config import FieldValidationError
 import lsst.pipe.base as pipeBase
@@ -38,7 +38,7 @@ from lsst.pipe.base.task import TaskError
 
 from lsst.utils import getPackageDir
 from lsst.pipe.tasks.characterizeImage import CharacterizeImageTask
-from lsst.meas.algorithms import ReferenceObjectLoader, MagnitudeLimit
+from lsst.meas.algorithms import ReferenceObjectLoader
 from lsst.meas.astrom import AstrometryTask, FitAffineWcsTask
 
 import lsst.afw.detection as afwDetect
@@ -429,7 +429,7 @@ class ProcessStarTaskConfig(pipeBase.PipelineTaskConfig,
     )
     # ProcessStar own parameters
     isr = pexConfig.ConfigurableField(
-        target=IsrTask,
+        target=IsrTaskLSST,
         doc="Task to perform instrumental signature removal",
     )
     charImage = pexConfig.ConfigurableField(
@@ -497,7 +497,6 @@ class ProcessStarTaskConfig(pipeBase.PipelineTaskConfig,
     )
 
     def setDefaults(self):
-        self.isr.doWrite = False
         self.charImage.doWriteExposure = False
 
         self.charImage.doApCorr = False
@@ -508,7 +507,6 @@ class ProcessStarTaskConfig(pipeBase.PipelineTaskConfig,
             self.charImage.measurePsf.starSelector['objectSize'].signalToNoiseMin = 10.0
             self.charImage.measurePsf.starSelector['objectSize'].fluxMin = 5000.0
         self.charImage.detection.includeThresholdMultiplier = 3
-        self.isr.overscan.fitType = 'MEDIAN_PER_ROW'
 
     def validate(self):
         super().validate()
@@ -964,17 +962,23 @@ class ProcessStarTask(pipeBase.PipelineTask):
 
         astromConfig = AstrometryTask.ConfigClass()
         astromConfig.wcsFitter.retarget(FitAffineWcsTask)
+
+        # Use magnitude limits for the reference catalog
         astromConfig.referenceSelector.doMagLimit = True
-        magLimit = MagnitudeLimit()
-        magLimit.minimum = 1
-        magLimit.maximum = 15
-        astromConfig.referenceSelector.magLimit = magLimit
+        astromConfig.referenceSelector.magLimit.minimum = 1
+        astromConfig.referenceSelector.magLimit.maximum = 15
         astromConfig.referenceSelector.magLimit.fluxField = "phot_g_mean_flux"
         astromConfig.matcher.maxRotationDeg = 5.99
         astromConfig.matcher.maxOffsetPix = 3000
-        astromConfig.sourceSelector['matcher'].minSnr = 10
+
+        # Use a SNR limit for the science catalog
+        astromConfig.sourceSelector["science"].doSignalToNoise = True
+        astromConfig.sourceSelector["science"].signalToNoise.minimum = 10
+        astromConfig.sourceSelector["science"].signalToNoise.fluxField = "slot_PsfFlux_instFlux"
+        astromConfig.sourceSelector["science"].signalToNoise.errField = "slot_PsfFlux_instFluxErr"
         astromConfig.sourceSelector["science"].doRequirePrimary = False
         astromConfig.sourceSelector["science"].doIsolated = False
+
         solver = AstrometryTask(config=astromConfig, refObjLoader=refObjLoader)
 
         # TODO: Change this to doing this the proper way
