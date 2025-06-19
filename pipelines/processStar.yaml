@@ -4,6 +4,7 @@ tasks:
   isr:
     class: lsst.ip.isr.IsrTaskLSST
     config:
+      connections.outputExposure: post_isr_image
       # characterize performance when turning on darks as first attempt found it
       # to degrade performance (possibly due to bad darks, but take care here)
       doDark: False
@@ -15,6 +16,7 @@ tasks:
   characterizeImage:
     class: lsst.pipe.tasks.characterizeImage.CharacterizeImageTask
     config:
+      connections.exposure: post_isr_image
       repair.doCosmicRay: False
       doApCorr: False
       doMeasurePsf: False
@@ -28,9 +30,10 @@ tasks:
   singleStarCentroid: lsst.atmospec.centroiding.SingleStarCentroidTask
   processStar: lsst.atmospec.processStar.ProcessStarTask
 subsets:
-  step1:
+  step1a-single-visit-detectors:
     subset:
       - isr
+  step1b-single-visit-visits:
       - characterizeImage
       - singleStarCentroid
       - processStar
