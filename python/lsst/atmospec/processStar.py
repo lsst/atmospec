@@ -218,7 +218,7 @@ class ProcessStarTaskConfig(pipeBase.PipelineTaskConfig,
         dtype=float,
         doc="Prior on the reliability of the centroid estimate in pixels. "
         "PIXSHIFT_PRIOR internally.",
-        default=5,
+        default=2,
         check=lambda x: x > 0,
     )
     doFilterRotatedImage = pexConfig.Field(
@@ -304,6 +304,8 @@ class ProcessStarTaskConfig(pipeBase.PipelineTaskConfig,
             -1: "The first order spectrum in the negative y direction",
             2: "The second order spectrum in the positive y direction",
             -2: "The second order spectrum in the negative y direction",
+            3: "The third order spectrum in the positive y direction",
+            -3: "The third order spectrum in the negative y direction",
         }
     )
     signalWidth = pexConfig.Field(  # TODO: change this to be set wrt the focus/seeing, i.e. FWHM from imChar
@@ -342,8 +344,10 @@ class ProcessStarTaskConfig(pipeBase.PipelineTaskConfig,
         "PSF_TYPE internally.",
         default="Moffat",
         allowed={
+            "Gauss": "A Gauss function",
             "Moffat": "A Moffat function",
-            "MoffatGauss": "A Moffat plus a Gaussian"
+            "MoffatGauss": "A Moffat plus a Gaussian",
+            "DoubleMoffat": "A Double Moffat function"
         }
     )
     psfPolynomialOrder = pexConfig.Field(
@@ -507,11 +511,17 @@ class ProcessStarTaskConfig(pipeBase.PipelineTaskConfig,
     def validate(self):
         super().validate()
         uvspecPath = shutil.which('uvspec')
-        if uvspecPath is None and self.doFitAtmosphere is True:
-            raise FieldValidationError(self.__class__.doFitAtmosphere, self, "uvspec is not in the path,"
+        try:
+            import getObsAtmo
+        except ModuleNotFoundError:
+            getObsAtmo = None
+        if uvspecPath is None and getObsAtmo is None and self.doFitAtmosphere is True:
+            raise FieldValidationError(self.__class__.doFitAtmosphere, self,
+                                       "uvspec is not in the path nor getObsAtmo is instaled,"
                                        " but doFitAtmosphere is True.")
-        if uvspecPath is None and self.doFitAtmosphereOnSpectrogram is True:
-            raise FieldValidationError(self.__class__.doFitAtmosphereOnSpectrogram, self, "uvspec is not in"
+        if uvspecPath is None and getObsAtmo is None and self.doFitAtmosphereOnSpectrogram is True:
+            raise FieldValidationError(self.__class__.doFitAtmosphereOnSpectrogram, self,
+                                       "uvspec is not in the path nor getObsAtmo is installed,"
                                        " the path, but doFitAtmosphere is True.")
 
 
@@ -876,7 +886,7 @@ class ProcessStarTask(pipeBase.PipelineTask):
             'OBS_SURFACE': 9636,
             'PAPER': False,
             'SAVE': False,
-            'DISTANCE2CCD_ERR': 0.4,
+            'DISTANCE2CCD_ERR': 0.05,
 
             # Parameters set programatically
             'LAMBDAS': np.arange(self.config.lambdaMin,
@@ -905,6 +915,8 @@ class ProcessStarTask(pipeBase.PipelineTask):
             # spectractor handles this, so while it's quite ugly, do this to
             # keep the behaviour the same for now.
             linearStagePosition += 4  # hologram is sealed with a 4 mm window
+        if grating == 'blue300lpmm_qn1':
+            linearStagePosition += 3.4  # hologram is sealed with a 4 mm window
         overrideDict['DISTANCE2CCD'] = linearStagePosition
 
         target = inputExp.visitInfo.object
