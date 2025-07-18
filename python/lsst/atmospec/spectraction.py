@@ -154,9 +154,9 @@ class SpectractorShim:
         x, y = image.target_guess
         self.log.debug(f"Image shape = {image.data.shape}")
         self.log.debug(f"x, y = {x}, {y}")
-        x = int(np.round(x))
-        y = int(np.round(y))
-        self.log.debug(f"Value at {x}, {y} = {image.data[y, x]}")
+        #x = int(np.round(x))
+        #y = int(np.round(y))
+        #self.log.debug(f"Value at {x}, {y} = {image.data[y, x]}")
 
     def spectractorImageFromLsstExposure(self, exp, xpos, ypos, *, target_label='',
                                          disperser_label='', filter_label=''):
@@ -217,7 +217,7 @@ class SpectractorShim:
         self._setReadNoiseFromExp(image, exp, 8.5)
         # xxx remove hard coding of 1 below!
         import lsst.daf.butler as dafButler
-        butler = dafButler.Butler("/repo/embargo_old", collections=['LATISS/calib', 'LATISS/raw/all', 'LATISS/calib/legacy'])
+        butler = dafButler.Butler("/repo/embargo", collections=['LATISS/calib', 'LATISS/raw/all', 'LATISS/calib/legacy'])
         ptcGainDict = getPTCGainDict(butler)
         certifiedFlat = getCertifiedFlat(butler, dataId=exp.visitInfo.id, filter="empty")
         image.gain = self._transformArrayFromExpToImage(makeGainFlat(certifiedFlat, ptcGainDict).image.array)
@@ -234,8 +234,7 @@ class SpectractorShim:
 
         image.convert_to_ADU_rate_units()  # divides by expTime and sets units to "ADU/s"
 
-        image.disperser = Hologram(disperser_label, D=parameters.DISTANCE2CCD,
-                                   data_dir=parameters.DISPERSER_DIR, verbose=parameters.VERBOSE)
+        image.disperser = Hologram(label=disperser_label, data_dir=parameters.DISPERSER_DIR)
 
         image.compute_parallactic_angle()
 
@@ -440,7 +439,7 @@ class SpectractorShim:
             self.debugPrintTargetCentroidValue(image)
             title = 'Raw image with input target location'
             image.plot_image(scale='symlog', target_pixcoords=image.target_guess, title=title)
-            self.log.info(f"Pixel value at centroid = {image.data[int(xpos), int(ypos)]}")
+            # self.log.info(f"Pixel value at centroid = {image.data[int(xpos), int(ypos)]}")
 
         # XXX this needs removing or at least dealing with to not always
         # just run! ASAP XXX
@@ -466,7 +465,7 @@ class SpectractorShim:
         # and if not, at least test how the rotation code compares
         # this part of Spectractor is certainly slow at the very least
         if True:  # TODO: change this to be an option, at least for testing vs LSST
-            self.log.info('Search for the target in the image...')
+            self.log.info(f'Search for the target in the image... Guess is {image.target_guess}')
             # sets the image.target_pixcoords
             _ = find_target(image, image.target_guess, widths=(parameters.XWINDOW, parameters.YWINDOW))
             turn_image(image)  # creates the rotated data, and sets the image.target_pixcoords_rotated
@@ -506,7 +505,7 @@ class SpectractorShim:
             # XXX Check what this is set to, and how
             # likely need to be passed through
             with_adr = False
-        calibrate_spectrum(spectrum, with_adr=with_adr)
+        calibrate_spectrum(spectrum, with_adr=with_adr, grid_search=False)
 
         # not necessarily set during fit but required to be present for astropy
         # fits writing to work (required to be in keeping with upstream)

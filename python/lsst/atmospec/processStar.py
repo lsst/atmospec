@@ -908,14 +908,16 @@ class ProcessStarTask(pipeBase.PipelineTask):
         # TODO: think if this is the right place for this
         # probably wants to go in spectraction.py really
         linearStagePosition = getLinearStagePosition(inputExp)
-        _, grating = getFilterAndDisperserFromExp(inputExp)
+        filt, grating = getFilterAndDisperserFromExp(inputExp)
         if grating == 'holo4_003':
             # the hologram is sealed with a 4 mm window and this is how
             # spectractor handles this, so while it's quite ugly, do this to
             # keep the behaviour the same for now.
-            linearStagePosition += 4  # hologram is sealed with a 4 mm window
+            linearStagePosition += 4.4  # hologram is sealed with a 4 mm window
         if grating == 'blue300lpmm_qn1':
-            linearStagePosition += 3.4  # hologram is sealed with a 4 mm window
+            linearStagePosition += 3.2
+        if filt == "BG40_65mm_1":
+            linearStagePosition -= 0.7
         overrideDict['DISTANCE2CCD'] = linearStagePosition
 
         target = inputExp.visitInfo.object

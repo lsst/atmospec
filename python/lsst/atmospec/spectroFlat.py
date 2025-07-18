@@ -60,12 +60,14 @@ def getCertifiedFlat(butler, dataId, filter='empty', disperser='empty'):
     :param disperser:
     :return:
     """
+    logger = logging.getLogger()
     flatDates, flatIds = findFlats(butler, filter=filter, disperser=disperser)
     dayObs = dataId // 100_000
     dateDiff = np.abs(int(dayObs) - flatDates)
     closestDate = flatDates[np.argmin(dateDiff)]
     # load flat
     flatId = flatIds[closestDate][-1]
+    logger.info(f'Loading flat {flatId=}...')
     certifiedFlat = butler.get('flat', instrument='LATISS', exposure=flatId, detector=0,
                                collections=['LATISS/calib', 'LATISS/calib/legacy', 'LATISS/raw/all'])
     return certifiedFlat
@@ -77,8 +79,10 @@ def getPTCGainDict(butler):
     :param butler:
     :return:
     """
-    ptc = butler.get("ptc", detector=0, collections=["LATISS/calib"])
+    logger = logging.getLogger()
+    ptc = butler.get("ptc", detector=0, collections=["LATISS/calib", "LATISS/calib/legacy"])
     ptcGainDict = ptc.gain
+    logger.info(f"PTC LATISS gains: {ptcGainDict}")
     return ptcGainDict
 
 
@@ -105,6 +109,7 @@ def makeGainFlat(certifiedFlat, gainDict, invertGains=False):
     gainFlat : `lsst.afw.image.exposure`
         The gain flat
     """
+    logger = logging.getLogger()
     flat = certifiedFlat.clone()
     detector = flat.getDetector()
     ampNames = set(list(a.getName() for a in detector))
