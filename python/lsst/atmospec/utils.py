@@ -42,7 +42,7 @@ import numpy as np
 import sys
 import lsst.afw.math as afwMath
 import lsst.afw.image as afwImage
-from lsst.ctrl.mpexec import SeparablePipelineExecutor
+from lsst.pipe.base.separable_pipeline_executor import SeparablePipelineExecutor
 import lsst.afw.geom as afwGeom
 import lsst.geom as geom
 import lsst.daf.butler as dafButler
