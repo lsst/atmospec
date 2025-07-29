@@ -20,7 +20,6 @@ setupRequired(utils)
 setupRequired(afw)
 setupRequired(spectractor)
 setupRequired(daf_butler)
-setupRequired(ctrl_mpexec)
 
 envPrepend(PYTHONPATH, ${PRODUCT_DIR}/python)
 envPrepend(PATH, ${PRODUCT_DIR}/bin)
