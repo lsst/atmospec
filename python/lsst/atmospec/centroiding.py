@@ -32,6 +32,8 @@ import lsst.pex.config as pexConfig
 
 from .utils import getTargetCentroidFromWcs
 
+import numpy as np
+
 __all__ = ['SingleStarCentroidTaskConfig', 'SingleStarCentroidTask']
 
 
@@ -161,7 +163,7 @@ class SingleStarCentroidTask(pipeBase.PipelineTask):
             return (centroid[0], centroid[1])
         else:
             raise ValueError(f"Unsupported fallback task: {task}")
-
+    
     def run(self, inputExp, inputSources):
         """XXX Docs
         """
@@ -204,6 +206,9 @@ class SingleStarCentroidTask(pipeBase.PipelineTask):
                 self.log.warning(f'Failed to find target centroid for {target} via WCS')
         if not centroid:
             centroid = self.runFallbackTask(inputExp)
+        if centroid and np.all(np.isnan(centroid)):
+            # last chance
+            centroid = [1750, 200]
 
         centroidTuple = (centroid[0], centroid[1])  # unify Point2D or tuple to tuple
         self.log.info(f"Centroid of main star found at {centroidTuple} found"
