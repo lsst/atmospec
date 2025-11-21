@@ -44,7 +44,9 @@ from spectractor.fit.fit_spectrogram import (SpectrogramFitWorkspace,  # noqa: E
 
 from lsst.daf.base import DateTime  # noqa: E402
 from .utils import getFilterAndDisperserFromExp  # noqa: E402
-from .spectroFlat import getPTCGainDict, makeSensorFlat, getCertifiedFlat, makeGainFlat   # noqa: E402
+from .spectroFlat import makeSensorFlat, getCertifiedFlat, makeGainFlat, plotFlat   # noqa: E402 
+
+from lsst.ip.isr import getExposureGains
 
 
 class SpectractorShim:
@@ -217,10 +219,15 @@ class SpectractorShim:
         self._setReadNoiseFromExp(image, exp, 8.5)
         # xxx remove hard coding of 1 below!
         import lsst.daf.butler as dafButler
-        butler = dafButler.Butler("/repo/embargo", collections=['LATISS/calib', 'LATISS/raw/all', 'LATISS/calib/legacy'])
-        ptcGainDict = getPTCGainDict(butler)
+        butler = dafButler.Butler("/repo/main", collections=['LATISS/calib', 'LATISS/raw/all'])  # , 'LATISS/calib/legacy
+        # ptcGainDict = getPTCGainDict(butler)
+
+        ptcGainDict = getExposureGains(exp)
+        self.log.warning(f"Exposure PTC gains = {ptcGainDict}")
+        parameters.CCD_GAIN = np.mean(list(ptcGainDict.values()))
+
         certifiedFlat = getCertifiedFlat(butler, dataId=exp.visitInfo.id, filter="empty")
-        image.gain = self._transformArrayFromExpToImage(makeGainFlat(certifiedFlat, ptcGainDict).image.array)
+        image.gain = self._transformArrayFromExpToImage(makeGainFlat(certifiedFlat, ptcGainDict, normalize=False).image.array)
         self._setStatErrorInImage(image, exp, useExpVariance=False)
         self._setMask(image, exp)
         sensorFlat = makeSensorFlat(certifiedFlat, ptcGainDict, kernel="mean", invertGains=True)

@@ -69,24 +69,25 @@ def getCertifiedFlat(butler, dataId, filter='empty', disperser='empty'):
     flatId = flatIds[closestDate][-1]
     logger.info(f'Loading flat {flatId=}...')
     certifiedFlat = butler.get('flat', instrument='LATISS', exposure=flatId, detector=0,
-                               collections=['LATISS/calib', 'LATISS/calib/legacy', 'LATISS/raw/all'])
+                               collections=['LATISS/calib',  'LATISS/raw/all'])  #   , 'LATISS/calib/legacy'
     return certifiedFlat
 
 
-def getPTCGainDict(butler):
-    """Get the PTC gains from a LATISS collection.
+# DEPRECATED
+#def getPTCGainDict(butler):
+#    """Get the PTC gains from a LATISS collection.
+#
+#    :param butler:
+#    :return:
+#    """
+#    logger = logging.getLogger()
+#    ptc = butler.get("ptc", detector=0, collections=["LATISS/calib"])  # , "LATISS/calib/legacy"
+#    ptcGainDict = ptc.gain
+#    logger.info(f"PTC LATISS gains: {ptcGainDict}")
+#    return ptcGainDict
 
-    :param butler:
-    :return:
-    """
-    logger = logging.getLogger()
-    ptc = butler.get("ptc", detector=0, collections=["LATISS/calib", "LATISS/calib/legacy"])
-    ptcGainDict = ptc.gain
-    logger.info(f"PTC LATISS gains: {ptcGainDict}")
-    return ptcGainDict
 
-
-def makeGainFlat(certifiedFlat, gainDict, invertGains=False):
+def makeGainFlat(certifiedFlat, gainDict, normalize=True, invertGains=False):
     """Given an exposure, make a flat from the gains.
 
     Construct an exposure where the image array data contains the gain of the
@@ -116,7 +117,10 @@ def makeGainFlat(certifiedFlat, gainDict, invertGains=False):
     assert set(gainDict.keys()) == ampNames
 
     gainDictNorm = {}
-    mean = np.mean(list(gainDict.values()))
+    if normalize:
+        mean = np.mean(list(gainDict.values()))
+    else:
+        mean = 1.
     for amp in gainDict.keys():
         gainDictNorm[amp] = gainDict[amp] / mean
 
@@ -258,7 +262,7 @@ def makeSensorFlat(
     logger.info(f'Window size for {kernel} smoothing = {windowSize}')
     pixelFlat = makePixelFlat(certifiedFlat, kernel=kernel, windowSize=windowSize, mode=mode,
                               percentile=percentile, removeBackground=removeBackground)
-    gainFlat = makeGainFlat(certifiedFlat, gainDict, invertGains=invertGains)
+    gainFlat = makeGainFlat(certifiedFlat, gainDict, normalize=True, invertGains=invertGains)
     sensorFlat = pixelFlat.clone()
 
     detector = sensorFlat.getDetector()

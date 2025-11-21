@@ -638,7 +638,7 @@ def runNotebook(dataId,
         return queryString
 
     # TODO: use LATISS_DEFAULT_COLLECTIONS here?
-    inputs = ['LATISS/raw/all', 'refcats', 'LATISS/calib', 'LATISS/calib/legacy']
+    inputs = ['LATISS/raw/all', 'refcats', 'LATISS/calib']  # , 'LATISS/calib/legacy'
     if extraInputCollections is not None:
         extraInputCollections = ensure_iterable(extraInputCollections)
         inputs.extend(extraInputCollections)
