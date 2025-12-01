@@ -219,7 +219,7 @@ class SpectractorShim:
         self._setReadNoiseFromExp(image, exp, 8.5)
         # xxx remove hard coding of 1 below!
         import lsst.daf.butler as dafButler
-        butler = dafButler.Butler("/repo/main", collections=['LATISS/calib', 'LATISS/raw/all'])  # , 'LATISS/calib/legacy
+        butler = dafButler.Butler("/repo/main", collections=['LATISS/calib', 'LATISS/raw/all', 'LATISS/calib/legacy'])  # , 'LATISS/calib/legacy
         # ptcGainDict = getPTCGainDict(butler)
 
         ptcGainDict = getExposureGains(exp)
