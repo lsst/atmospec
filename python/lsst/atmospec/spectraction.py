@@ -44,6 +44,9 @@ from spectractor.fit.fit_spectrogram import (SpectrogramFitWorkspace,  # noqa: E
 
 from lsst.daf.base import DateTime  # noqa: E402
 from .utils import getFilterAndDisperserFromExp  # noqa: E402
+from .spectroFlat import makeSensorFlat, getCertifiedFlat, makeGainFlat, plotFlat   # noqa: E402 
+
+from lsst.ip.isr import getExposureGains
 
 
 class SpectractorShim:
@@ -153,9 +156,9 @@ class SpectractorShim:
         x, y = image.target_guess
         self.log.debug(f"Image shape = {image.data.shape}")
         self.log.debug(f"x, y = {x}, {y}")
-        x = int(np.round(x))
-        y = int(np.round(y))
-        self.log.debug(f"Value at {x}, {y} = {image.data[y, x]}")
+        #x = int(np.round(x))
+        #y = int(np.round(y))
+        #self.log.debug(f"Value at {x}, {y} = {image.data[y, x]}")
 
     def spectractorImageFromLsstExposure(self, exp, xpos, ypos, *, target_label='',
                                          disperser_label='', filter_label=''):
@@ -213,11 +216,22 @@ class SpectractorShim:
         if parameters.DEBUG:
             self.debugPrintTargetCentroidValue(image)
 
-        self._setReadNoiseFromExp(image, exp, 1)
+        self._setReadNoiseFromExp(image, exp, 8.5)
         # xxx remove hard coding of 1 below!
-        image.gain = self._setGainFromExp(image, exp, .85)  # gain required for calculating stat err
+        import lsst.daf.butler as dafButler
+        butler = dafButler.Butler("/repo/main", collections=['LATISS/calib', 'LATISS/raw/all', 'LATISS/calib/legacy'])  # , 'LATISS/calib/legacy
+        # ptcGainDict = getPTCGainDict(butler)
+
+        ptcGainDict = getExposureGains(exp)
+        self.log.warning(f"Exposure PTC gains = {ptcGainDict}")
+        parameters.CCD_GAIN = np.mean(list(ptcGainDict.values()))
+
+        certifiedFlat = getCertifiedFlat(butler, dataId=exp.visitInfo.id, filter="empty")
+        image.gain = self._transformArrayFromExpToImage(makeGainFlat(certifiedFlat, ptcGainDict, normalize=False).image.array)
         self._setStatErrorInImage(image, exp, useExpVariance=False)
-        # image.coord as an astropy SkyCoord - currently unused
+        self._setMask(image, exp)
+        sensorFlat = makeSensorFlat(certifiedFlat, ptcGainDict, kernel="mean", invertGains=True)
+        image.flat = self._transformArrayFromExpToImage(sensorFlat.image.array)
 
         self._setImageAndHeaderInfo(image, exp)  # sets image attributes
 
@@ -227,8 +241,7 @@ class SpectractorShim:
 
         image.convert_to_ADU_rate_units()  # divides by expTime and sets units to "ADU/s"
 
-        image.disperser = Hologram(disperser_label, D=parameters.DISTANCE2CCD,
-                                   data_dir=parameters.DISPERSER_DIR, verbose=parameters.VERBOSE)
+        image.disperser = Hologram(label=disperser_label, data_dir=parameters.DISPERSER_DIR)
 
         image.compute_parallactic_angle()
 
@@ -264,6 +277,16 @@ class SpectractorShim:
             self.log.warning("Failed to set AIRMASS, default value of 1 used")
             image.header.airmass = 1.
 
+        # get supplementary metadata
+        md = exp.getMetadata().toDict()
+        image.header['DOMEAZ'] = md['DOMEAZ']
+        image.header['AZ'] = md['AZSTART']
+        image.header['EL'] = md['ELSTART']
+        image.header['RA'] = md['RA']
+        image.header['MJD'] = md['MJD']
+        image.header['WINDSPD'] = md['WINDSPD']
+        image.header['WINDDIR'] = md['WINDDIR']
+
         return
 
     def _getImageData(self, exp, trimToSquare=False):
@@ -271,7 +294,12 @@ class SpectractorShim:
             data = exp.image.array[0:4000, 0:4000]
         else:
             data = exp.image.array
-        return data.T[::, ::]
+        return self._transformArrayFromExpToImage(data)
+
+    def _transformArrayFromExpToImage(self, array):
+        # apply transformation on an exposure array to have correct orientation
+        # in Spectractor Image
+        return array.T[::, ::]
 
     def _setReadNoiseFromExp(self, spectractorImage, exp, constValue=None):
         # xxx need to implement this properly
@@ -281,15 +309,35 @@ class SpectractorShim:
             # TODO: Check with Jeremy if we want the raw read noise
             # or the per-pixel variance. Either is doable, just need to know.
             raise NotImplementedError("Setting noise image from exp variance not implemented")
+            raw = butler.get('raw', instrument='LATISS', exposure=dataId, detector=0,
+                             collections=['LATISS/calib', 'LATISS/raw/all'])
+            det = raw.getDetector()
+            raw_image = raw.getImage()
+            spectractorImage.read_out_noise = np.zeros_like(spectractorImage.data)
+            for amp in det:
+                ampData = raw_image[amp.getRawSerialOverscanBBox()].array
+                noise_over_serial_fliped = ampData[:, :-2].std(axis=0).mean()
+                bbox = amp.getBBox()
+                spectractorImage.read_out_noise[bbox] = noise_over_serial_fliped
+                print('amp name=', amp.getName(),
+                      ' header noise ? =', amp.getReadNoise(),
+                      'header gain ? =', amp.getGain(),
+                      '(flip =', noise_over_serial_fliped, ')')
 
     def _setReadNoiseToNone(self, spectractorImage):
         spectractorImage.read_out_noise = None
 
     def _setStatErrorInImage(self, image, exp, useExpVariance=False):
         if useExpVariance:
-            image.stat_errors = exp.maskedImage.variance.array  # xxx need to deal with TRANSPOSE here
+            image.err = self._transformArrayFromExpToImage(np.sqrt(exp.getVariance().array))
         else:
             image.compute_statistical_error()
+
+    def _setMask(self, image, exp):
+        badBit = exp.getMask().getPlaneBitMask("BAD")
+        crBit = exp.getMask().getPlaneBitMask("CR")
+        badPixels = np.logical_or((exp.getMask().array & badBit) > 0, (exp.getMask().array & crBit) > 0)
+        image.mask = self._transformArrayFromExpToImage(badPixels)
 
     def _setGainFromExp(self, spectractorImage, exp, constValue=None):
         # xxx need to implement this properly
@@ -398,7 +446,7 @@ class SpectractorShim:
             self.debugPrintTargetCentroidValue(image)
             title = 'Raw image with input target location'
             image.plot_image(scale='symlog', target_pixcoords=image.target_guess, title=title)
-            self.log.info(f"Pixel value at centroid = {image.data[int(xpos), int(ypos)]}")
+            # self.log.info(f"Pixel value at centroid = {image.data[int(xpos), int(ypos)]}")
 
         # XXX this needs removing or at least dealing with to not always
         # just run! ASAP XXX
@@ -424,7 +472,7 @@ class SpectractorShim:
         # and if not, at least test how the rotation code compares
         # this part of Spectractor is certainly slow at the very least
         if True:  # TODO: change this to be an option, at least for testing vs LSST
-            self.log.info('Search for the target in the image...')
+            self.log.info(f'Search for the target in the image... Guess is {image.target_guess}')
             # sets the image.target_pixcoords
             _ = find_target(image, image.target_guess, widths=(parameters.XWINDOW, parameters.YWINDOW))
             turn_image(image)  # creates the rotated data, and sets the image.target_pixcoords_rotated
@@ -446,11 +494,12 @@ class SpectractorShim:
         # Subtract background and bad pixels
         w_psf1d, bgd_model_func = extract_spectrum_from_image(image, spectrum,
                                                               signal_width=parameters.PIXWIDTH_SIGNAL,
-                                                              ws=(parameters.PIXDIST_BACKGROUND,
+                                                              ws=[parameters.PIXDIST_BACKGROUND,
                                                                   parameters.PIXDIST_BACKGROUND
-                                                                  + parameters.PIXWIDTH_BACKGROUND),
-                                                              right_edge=image.data.shape[1])
+                                                                  + parameters.PIXWIDTH_BACKGROUND])
         spectrum.atmospheric_lines = atmospheric_lines
+        if plotting:
+            spectrum.plot_spectrum()
 
         # PSF2D deconvolution
         if parameters.SPECTRACTOR_DECONVOLUTION_PSF2D:
@@ -463,12 +512,12 @@ class SpectractorShim:
             # XXX Check what this is set to, and how
             # likely need to be passed through
             with_adr = False
-        calibrate_spectrum(spectrum, with_adr=with_adr)
+        calibrate_spectrum(spectrum, with_adr=with_adr, grid_search=False)
 
         # not necessarily set during fit but required to be present for astropy
         # fits writing to work (required to be in keeping with upstream)
-        spectrum.data_order2 = np.zeros_like(spectrum.lambdas)
-        spectrum.err_order2 = np.zeros_like(spectrum.lambdas)
+        spectrum.data_next_order = np.zeros_like(spectrum.lambdas)
+        spectrum.err_next_order = np.zeros_like(spectrum.lambdas)
 
         # Full forward model extraction:
         # adds transverse ADR and order 2 subtraction
@@ -500,6 +549,7 @@ class SpectractorShim:
 
         # Save the spectrum
         self._ensureFitsHeader(spectrum)  # SIMPLE is missing by default
+        self._ensureFitsHeader(image)  # SIMPLE is missing by default  # TODO: debug this
 
         # Plot the spectrum
         parameters.DISPLAY = True
