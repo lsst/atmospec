@@ -21,7 +21,7 @@
 
 __all__ = ['ProcessStarTask', 'ProcessStarTaskConfig']
 
-import os
+import importlib.resources
 import shutil
 import numpy as np
 import matplotlib.pyplot as plt
@@ -36,7 +36,6 @@ import lsst.pipe.base as pipeBase
 import lsst.pipe.base.connectionTypes as cT
 from lsst.pipe.base.task import TaskError
 
-from lsst.utils import getPackageDir
 from lsst.pipe.tasks.characterizeImage import CharacterizeImageTask
 from lsst.meas.algorithms import ReferenceObjectLoader
 from lsst.meas.astrom import AstrometryTask, FitAffineWcsTask
@@ -769,8 +768,8 @@ class ProcessStarTask(pipeBase.PipelineTask):
         """
         target = target.replace('spec:', '')
 
-        nameMappingsFile = os.path.join(getPackageDir('atmospec'), 'data', 'nameMappings.txt')
-        names, mappedNames = np.loadtxt(nameMappingsFile, dtype=str, unpack=True)
+        with importlib.resources.path("lsst.atmospec", "resources/data/nameMappings.txt") as nameMappingsFile:
+            names, mappedNames = np.loadtxt(nameMappingsFile, dtype=str, unpack=True)
         assert len(names) == len(mappedNames)
         conversions = {name: mapped for name, mapped in zip(names, mappedNames)}
 
@@ -916,13 +915,11 @@ class ProcessStarTask(pipeBase.PipelineTask):
         if target in ['FlatField position', 'Park position', 'Test', 'NOTSET']:
             raise ValueError(f"OBJECT set to {target} - this is not a celestial object!")
 
-        packageDir = getPackageDir('atmospec')
-        configFilename = os.path.join(packageDir, 'config', 'auxtel.ini')
-
-        spectractor = SpectractorShim(configFile=configFilename,
-                                      paramOverrides=overrideDict,
-                                      supplementaryParameters=supplementDict,
-                                      resetParameters=resetParameters)
+        with importlib.resources.path("lsst.atmospec", "resources/config/auxtel.ini") as configFilename:
+            spectractor = SpectractorShim(configFile=configFilename,
+                                          paramOverrides=overrideDict,
+                                          supplementaryParameters=supplementDict,
+                                          resetParameters=resetParameters)
 
         if 'astrometricMatch' in inputCentroid:
             centroid = inputCentroid['centroid']
@@ -1011,9 +1008,7 @@ class ProcessStarTask(pipeBase.PipelineTask):
             The list of all objects to be treated as stars despite not starting
             with HD.
         """
-        starNameFile = os.path.join(getPackageDir('atmospec'), 'data', 'starNames.txt')
-        with open(starNameFile, 'r') as f:
-            lines = f.readlines()
+        lines = importlib.resources.read_text("lsst.atmospec", "resources/data/starNames.txt").split("\n")
         return [line.strip() for line in lines]
 
     def flatfield(self, exp, disp):
