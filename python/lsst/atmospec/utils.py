@@ -642,7 +642,7 @@ def runNotebook(dataId,
     run = outputCollection + '/run'
     butler.registry.defaults = RegistryDefaults(collections=outputCollection, run=run, instrument='LATISS')
     butler.registry.setCollectionChain(outputCollection, [run] + inputs)
-    pipeline = Pipeline.fromFile("${ATMOSPEC_DIR}/pipelines/processStar.yaml")
+    pipeline = Pipeline.from_uri("resource://lsst.atmospec/resources/pipelines/processStar.yaml")
 
     for taskName, configClass in taskConfigs.items():
         for option, value in configClass.items():
