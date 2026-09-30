@@ -290,10 +290,13 @@ class SpectractionHelperTestCase(lsst.utils.tests.TestCase):
         self.assertIsNotNone(image.err)
 
     def test_setStatErrorInImageFromVariance(self):
+        # useExpVariance=True must write to Image.err (renamed from the old
+        # Image.stat_errors, which no longer exists in Spectractor).
         image = _makeSpectractorImage(shape=(24, 20))
         exp = _makeExposure()
+        self.assertFalse(hasattr(Image, "stat_errors"))
         self.shim._setStatErrorInImage(image, exp, useExpVariance=True)
-        np.testing.assert_array_equal(image.stat_errors, exp.maskedImage.variance.array)
+        np.testing.assert_array_equal(image.err, exp.maskedImage.variance.array)
 
     def test_debugPrintTargetCentroidValue(self):
         image = mock.MagicMock()
@@ -395,6 +398,31 @@ class SpectractionImageBuildTestCase(lsst.utils.tests.TestCase):
         self.assertEqual(image.expo, 30.0)
         # target_guess is the (y, x) translation of the input centroid
         self.assertEqual(tuple(image.target_guess), (6.0, 5.0))
+
+    def test_hologramConstructedWithoutDeadKwargs(self):
+        # Spectractor's Disperser/Hologram no longer accept ``D`` or
+        # ``verbose``; the shim must call Hologram with only the supported
+        # kwargs (currently just data_dir).
+        exp = _makeExposure()
+        with mock.patch.object(spectractionModule, "Hologram") as mockHologram, \
+                mock.patch.object(Image, "compute_parallactic_angle"):
+            self.shim.spectractorImageFromLsstExposure(
+                exp, 5.0, 6.0, target_label='HD1',
+                disperser_label='holo4_003', filter_label='empty')
+        mockHologram.assert_called_once()
+        _, kwargs = mockHologram.call_args
+        self.assertNotIn('D', kwargs)
+        self.assertNotIn('verbose', kwargs)
+
+    def test_hologramSignatureRejectsDeadKwargs(self):
+        # Guard against the upstream signature regressing: the real Hologram
+        # must not accept ``D`` or ``verbose``.
+        import inspect
+        from spectractor.extractor.dispersers import Disperser, Hologram
+        params = set(inspect.signature(Hologram.__init__).parameters)
+        params |= set(inspect.signature(Disperser.__init__).parameters)
+        self.assertNotIn('D', params)
+        self.assertNotIn('verbose', params)
 
     def test_spectractorImageFromLsstExposureDebug(self):
         exp = _makeExposure()
@@ -502,6 +530,31 @@ class SpectractionRunTestCase(lsst.utils.tests.TestCase):
         self.assertFalse(started["ffmRun"].called)
         self.assertFalse(started["specRun"].called)
         self.assertFalse(started["sgramRun"].called)
+
+    def test_extractSpectrumCalledWithoutRightEdge(self):
+        # Spectractor's extract_spectrum_from_image no longer accepts
+        # ``right_edge`` (it computes it internally from data_rotated), so the
+        # shim must not pass it.
+        parameters.CCD_REBIN = 1
+        parameters.VERBOSE = False
+        parameters.DEBUG = False
+        parameters.SPECTRACTOR_DECONVOLUTION_PSF2D = False
+        parameters.SPECTRACTOR_DECONVOLUTION_FFM = False
+        parameters.OBS_OBJECT_TYPE = "STAR"
+        result, spectrum, image, started = self._runWithMocks(
+            doFitAtmosphere=False, doFitAtmosphereOnSpectrogram=False,
+            outputRoot=None, plotting=False)
+        self.assertTrue(started["extract"].called)
+        _, kwargs = started["extract"].call_args
+        self.assertNotIn('right_edge', kwargs)
+
+    def test_extractSpectrumSignatureRejectsRightEdge(self):
+        # Guard against the upstream signature regressing: the real
+        # extract_spectrum_from_image must not accept ``right_edge``.
+        import inspect
+        from spectractor.extractor.extractor import extract_spectrum_from_image
+        params = inspect.signature(extract_spectrum_from_image).parameters
+        self.assertNotIn('right_edge', params)
 
     def test_runDebugAndRebin(self):
         parameters.CCD_REBIN = 2
