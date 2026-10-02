@@ -227,8 +227,7 @@ class SpectractorShim:
 
         image.convert_to_ADU_rate_units()  # divides by expTime and sets units to "ADU/s"
 
-        image.disperser = Hologram(disperser_label, D=parameters.DISTANCE2CCD,
-                                   data_dir=parameters.DISPERSER_DIR, verbose=parameters.VERBOSE)
+        image.disperser = Hologram(disperser_label, data_dir=parameters.DISPERSER_DIR)
 
         image.compute_parallactic_angle()
 
@@ -287,7 +286,7 @@ class SpectractorShim:
 
     def _setStatErrorInImage(self, image, exp, useExpVariance=False):
         if useExpVariance:
-            image.stat_errors = exp.maskedImage.variance.array  # xxx need to deal with TRANSPOSE here
+            image.err = exp.maskedImage.variance.array  # xxx need to deal with TRANSPOSE here
         else:
             image.compute_statistical_error()
 
@@ -448,8 +447,7 @@ class SpectractorShim:
                                                               signal_width=parameters.PIXWIDTH_SIGNAL,
                                                               ws=(parameters.PIXDIST_BACKGROUND,
                                                                   parameters.PIXDIST_BACKGROUND
-                                                                  + parameters.PIXWIDTH_BACKGROUND),
-                                                              right_edge=image.data.shape[1])
+                                                                  + parameters.PIXWIDTH_BACKGROUND))
         spectrum.atmospheric_lines = atmospheric_lines
 
         # PSF2D deconvolution
