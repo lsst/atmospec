@@ -18,7 +18,6 @@ setupRequired(obs_lsst)
 setupRequired(daf_base)
 setupRequired(utils)
 setupRequired(afw)
-setupRequired(spectractor)
 setupRequired(daf_butler)
 
 envPrepend(PYTHONPATH, ${PRODUCT_DIR}/python)
