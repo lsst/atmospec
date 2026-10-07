@@ -488,7 +488,7 @@ class RunNotebookTestCase(lsst.utils.tests.TestCase):
                 patchExecutor as mockExecutor, patchDefaults:
             butlerInstance = mockDafButler.Butler.return_value
             butlerInstance.get.return_value = 'theSpectrum'
-            pipelineInstance = mockPipeline.fromFile.return_value
+            pipelineInstance = mockPipeline.from_uri.return_value
             result = runNotebook(dataId, 'testOutputCollection', **kwargs)
             return result, butlerInstance, pipelineInstance, mockExecutor
 
