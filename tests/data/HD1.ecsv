@@ -1,0 +1,240 @@
+# %ECSV 1.0
+# ---
+# datatype:
+# - name: main_id
+#   datatype: string
+#   description: Main identifier for an object
+#   meta: !!omap
+#   - {ucd: meta.id;meta.main}
+#   - {utype: 'mango:MangoObject.identifier'}
+#   - {_votable_string_dtype: char}
+#   - {_votable_arraysize: '*'}
+#   subtype: json
+# - name: ra
+#   unit: deg
+#   datatype: float64
+#   description: Right ascension
+#   meta: !!omap
+#   - {ucd: pos.eq.ra;meta.main}
+#   - {utype: 'mango:EpochPosition.longitude[CS.spaceSys=ICRS CT.epoch=J2000]'}
+# - name: dec
+#   unit: deg
+#   datatype: float64
+#   description: Declination
+#   meta: !!omap
+#   - {ucd: pos.eq.dec;meta.main}
+#   - {utype: 'mango:EpochPosition.latitude[CS.spaceSys=ICRS CT.epoch=J2000]'}
+# - name: coo_err_maj
+#   unit: mas
+#   datatype: float32
+#   description: Coordinate error major axis
+#   meta: !!omap
+#   - {ucd: phys.angSize.smajAxis;pos.errorEllipse;pos.eq}
+#   - {utype: 'mango:EpochPosition.errors.position/mango:error.PErrorEllipse.semiMajorAxis[CS.spaceSys=ICRS CT.epoch=J2000]'}
+# - name: coo_err_min
+#   unit: mas
+#   datatype: float32
+#   description: Coordinate error minor axis
+#   meta: !!omap
+#   - {ucd: phys.angSize.sminAxis;pos.errorEllipse;pos.eq}
+#   - {utype: 'mango:EpochPosition.errors.position/mango:error.PErrorEllipse.semiMinorAxis[CS.spaceSys=ICRS CT.epoch=J2000]'}
+# - name: coo_err_angle
+#   unit: deg
+#   datatype: int16
+#   description: Coordinate error angle
+#   meta: !!omap
+#   - {ucd: pos.posAng;pos.errorEllipse;pos.eq}
+#   - {utype: 'mango:EpochPosition.errors.position/mango:error.PErrorEllipse.angle[CS.spaceSys=ICRS CT.epoch=J2000]'}
+#   - values: {'null': -32768}
+# - name: coo_wavelength
+#   datatype: string
+#   description: Wavelength class for the origin of the coordinates (R,I,V,U,X,G)
+#   meta: !!omap
+#   - {ucd: instr.bandpass;pos.eq}
+#   - {_votable_string_dtype: char}
+# - name: coo_bibcode
+#   datatype: string
+#   description: Coordinate reference
+#   meta: !!omap
+#   - {ucd: meta.bib.bibcode;pos.eq}
+#   - {_votable_string_dtype: char}
+#   - {_votable_arraysize: '*'}
+#   subtype: json
+# - name: J
+#   datatype: float64
+#   description: J magnitude
+#   meta: !!omap
+#   - {ucd: phot.mag;em.IR.J}
+#   - {utype: 'mango:Brightness.value[CS.photCal=J]'}
+# - name: I
+#   datatype: float64
+#   description: I magnitude
+#   meta: !!omap
+#   - {ucd: phot.mag;em.opt.I}
+#   - {utype: 'mango:Brightness.value[CS.photCal=I]'}
+# - name: U
+#   datatype: float64
+#   description: U magnitude
+#   meta: !!omap
+#   - {ucd: phot.mag;em.opt.U}
+#   - {utype: 'mango:Brightness.value[CS.photCal=U]'}
+# - name: V
+#   datatype: float64
+#   description: V magnitude
+#   meta: !!omap
+#   - {ucd: phot.mag;em.opt.V}
+#   - {utype: 'mango:Brightness.value[CS.photCal=V]'}
+# - name: B
+#   datatype: float64
+#   description: B magnitude
+#   meta: !!omap
+#   - {ucd: phot.mag;em.opt.B}
+#   - {utype: 'mango:Brightness.value[CS.photCal=B]'}
+# - name: R
+#   datatype: float64
+#   description: R magnitude
+#   meta: !!omap
+#   - {ucd: phot.mag;em.opt.R}
+#   - {utype: 'mango:Brightness.value[CS.photCal=R]'}
+# - name: sp_type
+#   datatype: string
+#   description: MK spectral type
+#   meta: !!omap
+#   - {ucd: src.spType}
+#   - {_votable_string_dtype: char}
+#   - {_votable_arraysize: '*'}
+#   subtype: json
+# - name: rvz_redshift
+#   datatype: float64
+#   description: redshift
+#   meta: !!omap
+#   - {ucd: src.redshift}
+# - name: ids
+#   datatype: string
+#   description: List of all identifiers concatenated with pipe
+#   meta: !!omap
+#   - {ucd: meta.id}
+#   - {_votable_string_dtype: char}
+#   - {_votable_arraysize: '*'}
+#   subtype: json
+# - name: pm_err_min_prec
+#   datatype: int16
+#   description: Proper motion error minor axis precision
+#   meta: !!omap
+#   - values: {'null': -32768}
+# - name: pm_err_angle
+#   unit: deg
+#   datatype: int16
+#   description: Proper motion error angle
+#   meta: !!omap
+#   - {ucd: pos.posAng;pos.errorEllipse;pos.pm}
+#   - {utype: 'mango:EpochPosition.errors.properMotion/mango:error.PErrorEllipse.angle[CS.spaceSys=ICRS CT.epoch=J2000]'}
+#   - values: {'null': -32768}
+# - name: pm_bibcode
+#   datatype: string
+#   description: Proper motion reference
+#   meta: !!omap
+#   - {ucd: meta.bib.bibcode;pos.pm}
+#   - {_votable_string_dtype: char}
+#   - {_votable_arraysize: '*'}
+#   subtype: json
+# - name: pmdec
+#   unit: mas / yr
+#   datatype: float64
+#   description: Proper motion in DEC
+#   meta: !!omap
+#   - {ucd: pos.pm;pos.eq.dec}
+#   - {utype: 'mango:EpochPosition.pmLatitude[CS.spaceSys=ICRS CT.epoch=J2000]'}
+# - name: pm_err_maj_prec
+#   datatype: int16
+#   description: Proper motion error major axis precision
+#   meta: !!omap
+#   - values: {'null': -32768}
+# - name: pmdec_prec
+#   datatype: int16
+#   description: Proper motion in DEC precision
+#   meta: !!omap
+#   - values: {'null': -32768}
+# - name: pm_err_min
+#   unit: mas / yr
+#   datatype: float32
+#   description: Proper motion error minor axis
+#   meta: !!omap
+#   - {ucd: phys.angSize.sminAxis;pos.errorEllipse;pos.pm}
+#   - {utype: 'mango:EpochPosition.errors.properMotion/mango:error.PErrorEllipse.semiMinorAxis[CS.spaceSys=ICRS CT.epoch=J2000]'}
+# - name: pm_qual
+#   datatype: string
+#   description: Proper motion quality
+#   meta: !!omap
+#   - {ucd: meta.code.qual;pos.pm}
+#   - {_votable_string_dtype: char}
+# - name: pmra_prec
+#   datatype: int16
+#   description: Proper motion in RA precision
+#   meta: !!omap
+#   - values: {'null': -32768}
+# - name: pmra
+#   unit: mas / yr
+#   datatype: float64
+#   description: Proper motion in RA
+#   meta: !!omap
+#   - {ucd: pos.pm;pos.eq.ra}
+#   - {utype: 'mango:EpochPosition.pmLongitude[CS.spaceSys=ICRS CT.epoch=J2000]'}
+# - name: pm_err_maj
+#   unit: mas / yr
+#   datatype: float32
+#   description: Proper motion error major axis
+#   meta: !!omap
+#   - {ucd: phys.angSize.smajAxis;pos.errorEllipse;pos.pm}
+#   - {utype: 'mango:EpochPosition.errors.properMotion/mango:error.PErrorEllipse.semiMajorAxis[CS.spaceSys=ICRS CT.epoch=J2000]'}
+# - name: plx_bibcode
+#   datatype: string
+#   description: Parallax reference
+#   meta: !!omap
+#   - {ucd: meta.bib.bibcode;pos.parallax.trig}
+#   - {_votable_string_dtype: char}
+#   - {_votable_arraysize: '*'}
+#   subtype: json
+# - name: plx_value
+#   unit: mas
+#   datatype: float64
+#   description: Parallax
+#   meta: !!omap
+#   - {ucd: pos.parallax.trig}
+#   - {utype: 'mango:EpochPosition.parallax[CS.spaceSys=ICRS CT.epoch=J2000]'}
+# - name: plx_qual
+#   datatype: string
+#   description: Parallax quality
+#   meta: !!omap
+#   - {ucd: meta.code.qual;pos.parallax.trig}
+#   - {_votable_string_dtype: char}
+# - name: plx_err_prec
+#   datatype: int16
+#   description: Parallax error precision
+#   meta: !!omap
+#   - values: {'null': -32768}
+# - name: plx_err
+#   unit: mas
+#   datatype: float32
+#   description: Parallax error
+#   meta: !!omap
+#   - {ucd: stat.error;pos.parallax.trig}
+# - name: plx_prec
+#   datatype: int16
+#   description: Parallax precision
+#   meta: !!omap
+#   - values: {'null': -32768}
+# - name: matched_id
+#   datatype: string
+#   description: Identifier
+#   meta: !!omap
+#   - {ucd: meta.id}
+#   - {_votable_string_dtype: char}
+#   - {_votable_arraysize: '*'}
+#   subtype: json
+# meta: !!omap
+# - {ID: result_S1793045827146}
+# - {name: result_S1793045827146}
+# schema: astropy-2.0
+main_id ra dec coo_err_maj coo_err_min coo_err_angle coo_wavelength coo_bibcode J I U V B R sp_type rvz_redshift ids pm_err_min_prec pm_err_angle pm_bibcode pmdec pm_err_maj_prec pmdec_prec pm_err_min pm_qual pmra_prec pmra pm_err_maj plx_bibcode plx_value plx_qual plx_err_prec plx_err plx_prec matched_id
+"""HD      1""" 1.28683560187 67.83999458374 0.0406 0.0381 90 O """2020yCat.1350....0G""" 5.118000030517578 "" "" 7.420000076293945 8.699999809265137 "" """G9-K0IIIa""" -9.115891224398265e-05 """TIC 470914630|HIP 422|Gaia DR3 528971921686610304|2MASS J00050881+6750240|AG+67    4|AGKR    39|BD+67  1599|GSC 04294-00080|HD      1|HIC    422|IRAS 00025+6733|IRCO  2001|PPM  11914|SAO  10963|SKY#   146|TYC 4294-80-1|Gaia DR1 528971917388852608|Gaia DR2 528971921686610304|SBC9 3638""" 3 90 """2020yCat.1350....0G""" -5.045 3 3 0.05 A 3 7.48 0.053 """2020yCat.1350....0G""" 2.668 A 4 0.0485 3 """HD      1"""

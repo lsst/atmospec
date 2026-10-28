@@ -21,12 +21,15 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """Test cases for the atmospec SpectractorShim."""
 
+import functools
 import importlib.resources
 import os
+import shutil
 import tempfile
 import unittest
 from unittest import mock
 
+import astropy.config
 import numpy as np
 
 import lsst.utils
@@ -40,6 +43,27 @@ from spectractor import parameters
 from spectractor.extractor.images import Image
 import lsst.atmospec.spectraction as spectractionModule
 from lsst.atmospec.spectraction import SpectractorShim, Spectraction
+
+HD1_SIMBAD_TABLE = os.path.join(os.path.dirname(__file__), "data", "HD1.ecsv")
+
+
+def withSimbadCache(func):
+    """Serve the HD1 Simbad lookup from a committed table, without network.
+
+    Spectractor caches Simbad results as ``<label>.ecsv`` files under
+    ``astropy.config.get_cache_dir()/astroquery/Simbad`` and skips the query
+    when that file exists. The astropy cache dir is pointed at a temporary
+    directory seeded with ``tests/data/HD1.ecsv``, so the test neither queries
+    Simbad nor reads or writes the user's real cache.
+    """
+    @functools.wraps(func)
+    def wrapper(self, *args, **kwargs):
+        with tempfile.TemporaryDirectory() as tmpDir, astropy.config.set_temp_cache(tmpDir):
+            simbadDir = os.path.join(astropy.config.get_cache_dir(), "astroquery", "Simbad")
+            os.makedirs(simbadDir)
+            shutil.copy(HD1_SIMBAD_TABLE, simbadDir)
+            return func(self, *args, **kwargs)
+    return wrapper
 
 
 def _makeExposure(width=20, height=24, physicalFilter="empty~holo4_003",
@@ -387,6 +411,7 @@ class SpectractionImageBuildTestCase(lsst.utils.tests.TestCase):
         with importlib.resources.path("lsst.atmospec", "resources/config/auxtel.ini") as cfg:
             cls.shim = SpectractorShim(configFile=str(cfg))
 
+    @withSimbadCache
     def test_spectractorImageFromLsstExposure(self):
         exp = _makeExposure()
         with mock.patch.object(spectractionModule, "Hologram"), \
@@ -399,6 +424,7 @@ class SpectractionImageBuildTestCase(lsst.utils.tests.TestCase):
         # target_guess is the (y, x) translation of the input centroid
         self.assertEqual(tuple(image.target_guess), (6.0, 5.0))
 
+    @withSimbadCache
     def test_hologramConstructedWithoutDeadKwargs(self):
         # Spectractor's Disperser/Hologram no longer accept ``D`` or
         # ``verbose``; the shim must call Hologram with only the supported
@@ -424,6 +450,7 @@ class SpectractionImageBuildTestCase(lsst.utils.tests.TestCase):
         self.assertNotIn('D', params)
         self.assertNotIn('verbose', params)
 
+    @withSimbadCache
     def test_spectractorImageFromLsstExposureDebug(self):
         exp = _makeExposure()
         original = parameters.DEBUG
